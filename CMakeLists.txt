@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.25)
+project(connect4 LANGUAGES CXX)
+target_compile_features(connect4 PRIVATE cxx_std_20)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/../bin)   
+add_executable(connect4 src/client/main.cpp)
