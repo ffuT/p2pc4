@@ -19,6 +19,6 @@ int main(){
     grpc::Status status = stub->Join(&context, req, &ack);
     if(!status.ok())
         throw std::runtime_error(status.error_message().c_str());
-
+    std::printf("token: %s\n", ack.token().c_str());
     return EXIT_SUCCESS;
 }

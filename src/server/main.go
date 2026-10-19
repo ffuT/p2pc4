@@ -2,13 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
 
 	pb "github.com/ffuT/p2pc4/gen/rendezvousv1"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type server struct {
@@ -16,7 +15,8 @@ type server struct {
 }
 
 func (s *server) Join(ctx context.Context, req *pb.JoinReq) (*pb.JoinAck, error) {
-	return nil, status.Error(codes.Unimplemented, "todo")
+	fmt.Printf("client at ip: %s connected\n", "idk")
+	return &pb.JoinAck{Token: []byte{54, 55}}, nil
 }
 
 func main() {
@@ -24,6 +24,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	fmt.Printf("server listening on :50051...\n")
+
 	g := grpc.NewServer()
 	pb.RegisterRendezvousServer(g, &server{})
 	log.Fatal(g.Serve(lis))
