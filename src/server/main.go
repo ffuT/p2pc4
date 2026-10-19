@@ -20,7 +20,8 @@ func (s *server) Join(ctx context.Context, req *pb.JoinReq) (*pb.JoinAck, error)
 }
 
 func main() {
-	lis, err := net.Listen("tcp", ":50051") 
+	lis, err := net.Listen("tcp", ":50051")
+	if err != nil {
 		log.Fatal(err)
 	}
 	g := grpc.NewServer()
