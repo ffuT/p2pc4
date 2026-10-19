@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package rendezvous.v1;
+option go_package = "github.com/ffuT/p2pc4/gen/rendezvousv1";
+
+service Rendezvous {
+    rpc Join(JoinReq) returns (JoinAck);
+    rpc WaitPeer(WaitReq) returns (PeerInfo);
+}
+
+message JoinReq {
+    uint32 version = 1; // client version
+    string room = 2; // string key to find match
+}
+
+message JoinAck {
+    bytes token = 1;
+}
+
+message WaitReq {
+    bytes token = 1;
+}
+
+message PeerInfo {
+    string ip = 1;
+    uint32 port = 2;
+    bool start = 3;
+}

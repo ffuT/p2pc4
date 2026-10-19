@@ -2,3 +2,5 @@ summary.md
 build/
 bin/
 vcpkg_installed
+.cache
+compile_commands.json
