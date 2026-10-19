@@ -20,8 +20,7 @@ func (s *server) Join(ctx context.Context, req *pb.JoinReq) (*pb.JoinAck, error)
 }
 
 func main() {
-	lis, err := net.Listen("tcp", ":50051") // use the port you forwarded
-	if err != nil {
+	lis, err := net.Listen("tcp", ":50051") 
 		log.Fatal(err)
 	}
 	g := grpc.NewServer()
