@@ -14,7 +14,14 @@ import (
 	"google.golang.org/grpc/peer"
 )
 
-var version uint32 = 1
+const version uint32 = (1 << 16) | (0 << 8) | 0 // 1.0.0
+
+func checkVersion(client uint32) bool {
+	if client>>16 != version>>16 {
+		return true
+	}
+	return false
+}
 
 type Player struct {
 	token string
@@ -43,9 +50,11 @@ func (s *server) Join(ctx context.Context, req *pb.JoinReq) (*pb.JoinAck, error)
 	if p, ok := peer.FromContext(ctx); ok {
 		log.Printf("client at ip: %s connected\n", p.Addr)
 	}
-	if req.Version != version {
-		log.Printf("version mismatch server:%d user:%d", version, req.Version)
-		return nil, fmt.Errorf("outdated client version:%d, required:%d", req.Version, version)
+	if checkVersion(req.Version) {
+		sv := fmt.Sprintf("%d.%d.%d", uint8(version>>16&0xFF), uint8(version>>8&0xFF), uint8(version&0xFF))
+		cv := fmt.Sprintf("%d.%d.%d", uint8(req.Version>>16&0xFF), uint8(req.Version>>8&0xFF), uint8(req.Version&0xFF))
+		log.Printf("version mismatch server:%s user:%s", sv, cv)
+		return nil, fmt.Errorf("outdated client version:%s, required:%s", cv, sv)
 	}
 	tok := make([]byte, 16)
 	rand.Read(tok)

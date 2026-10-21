@@ -7,7 +7,7 @@
 #include "rendezvous.pb.h"
 #include <grpcpp/grpcpp.h>
 
-constexpr uint32_t version = 1;
+constexpr uint32_t version = (1 << 16) | (0 << 8) | 0; // 1.0.0
 
 int main() {
     auto channel = grpc::CreateChannel("localhost:50051", grpc::InsecureChannelCredentials());
