@@ -66,7 +66,7 @@ bool registerUdp(int fd, const sockaddr_in& server, const std::string& token) {
                 continue;
             return false;
         }
-        if(std::string(buf,n) == "OK"){
+        if(std::string(buf, n) == "OK"){
             printf("OK Received!\n");
             return true;
         }
@@ -94,7 +94,7 @@ bool holePunch(int fd, const sockaddr_in& peer) {
             sendto(fd, punch.data(), punch.size(), 0, (sockaddr*)&peer, sizeof(peer));
             quiet = 0;
         }
-        char buf[64];
+        char buf[64]{};
         sockaddr from{};
         socklen_t fromLen = sizeof(from);
         ssize_t n = recvfrom(fd, buf, sizeof(buf), 0, (sockaddr*)&from, &fromLen);
@@ -110,7 +110,7 @@ bool holePunch(int fd, const sockaddr_in& peer) {
         if(from.sa_family != AF_INET)
             return false;
         if(((sockaddr_in*)&from)->sin_addr.s_addr == peer.sin_addr.s_addr){
-            auto data = std::string(buf); 
+            auto data = std::string(buf, n); 
             if(data == "PUNCH"){
                 auto punchack = std::string("PUNCHACK");
                 sendto(fd, punchack.data(), punchack.size(), 0, (sockaddr*)&peer, sizeof(peer));

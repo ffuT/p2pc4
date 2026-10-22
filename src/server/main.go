@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"fmt"
 	"log"
 	"net"
+	"os"
+	"strings"
 	"sync"
 
 	pb "github.com/ffuT/p2pc4/gen/rendezvousv1"
@@ -170,8 +173,20 @@ func udpLoop(conn *net.UDPConn, s *server) {
 }
 
 func commands() {
+	var scanner = bufio.NewScanner(os.Stdin)
 	for {
+		scanner.Scan()
+		err := scanner.Err()
+		if err != nil {
+			log.Printf("Scanner Broke: %v", err)
+		}
 
+		args := strings.Split(scanner.Text(), " ")
+		switch args[0] {
+		case "exit", "quit", "shutdown":
+			log.Printf("Server Shutting Down!")
+			os.Exit(0)
+		}
 	}
 }
 

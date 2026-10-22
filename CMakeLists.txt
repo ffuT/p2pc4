@@ -18,9 +18,12 @@ protobuf_generate(TARGET rendezvous_proto
     PLUGIN "protoc-gen-grpc=\$<TARGET_FILE:gRPC::grpc_cpp_plugin>"
     IMPORT_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/proto)
 
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/../../bin)   
-
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE})
 add_executable(connect4 src/client/main.cpp)
+
+if(UNIX)
+    target_link_options(connect4 PRIVATE $<$<CONFIG:Release>:-static-libstdc++ -static-libgcc>)
+endif()
 
 target_compile_features(connect4 PRIVATE cxx_std_20)
 target_link_libraries(connect4 PRIVATE rendezvous_proto)
