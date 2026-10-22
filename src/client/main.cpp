@@ -2,13 +2,16 @@
 #include <asm-generic/socket.h>
 #include <bits/types/struct_timeval.h>
 #include <cerrno>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <stdexcept>
+#include <string>
 #include <sys/socket.h>
+#include <thread>
 #include <unistd.h>
 
 #include "rendezvous.grpc.pb.h"
@@ -80,14 +83,35 @@ sockaddr_in peerAddress(const rendezvous::v1::PeerInfo& info) {
     return addr;
 }
 
-// LATER STEP: the hole punch. Same socket fd as registerUdp!
-// TODO (outline):
-//  1. for ~10 s: sendto(peer, "PUNCH") every ~200 ms, and recvfrom() in between.
-//  2. received "PUNCH" from the peer -> answer "PUNCH_ACK" and you are connected.
-//     received "PUNCH_ACK"          -> you are connected.
-//  3. check the packet came from the peer (compare address), ignore anything else.
-//  4. timeout without any packet from the peer -> return false (relay fallback, much later).
 bool holePunch(int fd, const sockaddr_in& peer) {
+    auto wait = std::chrono::high_resolution_clock::now() + std::chrono::seconds(10);
+    std::string punch = "PUNCH";
+    while (wait > std::chrono::high_resolution_clock::now()) {
+            sendto(fd, punch.data(), punch.size(), 0, (sockaddr*)&peer, sizeof(peer));
+            char buf[64];
+            sockaddr from{};
+            socklen_t fromLen = sizeof(from);
+            ssize_t n = recvfrom(fd, buf, sizeof(buf), 0, (sockaddr*)&from, &fromLen);
+            if( n < 0) {
+                if(errno == EAGAIN || errno == EWOULDBLOCK) // eh what? 
+                    continue;
+                return false;
+            }
+            if(from.sa_family != AF_INET)
+                return false;
+            if(((sockaddr_in*)&from)->sin_addr.s_addr == peer.sin_addr.s_addr){
+                auto data = std::string(buf); 
+                if(data == "PUNCH"){
+                    punch = std::string("PUNCHACK");
+                    printf("Received Punch from peer!\n");    
+                } else if(data == "PUNCHACK"){
+                    printf("Hole Punch Success!\n");
+                    return true;
+                }
+            }
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    }
+    printf("Session Timed Out\n");
     return false;
 }
 
@@ -130,6 +154,8 @@ int main() {
     std::printf("peer ip: %s:%d\n", peerInfo.ip().c_str(), peerInfo.port());
 
     sockaddr_in peer = peerAddress(peerInfo);
+    holePunch(fd, peer);
+
     // TODO UDP 5 (later): holePunch(fd, peer); then moves/acks/keepalives over the same fd
     // TODO UDP 6: close(fd) when the game is over
     return EXIT_SUCCESS;
