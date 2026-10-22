@@ -7,7 +7,6 @@ import (
 	"log"
 	"net"
 	"sync"
-	"time"
 
 	pb "github.com/ffuT/p2pc4/gen/rendezvousv1"
 	"google.golang.org/grpc"
@@ -29,6 +28,7 @@ type Player struct {
 }
 
 type Room struct {
+	fin   uint8
 	p1    *Player
 	p2    *Player
 	ready chan struct{}
@@ -47,8 +47,8 @@ func GetServer() *server {
 }
 
 func (s *server) Join(ctx context.Context, req *pb.JoinReq) (*pb.JoinAck, error) {
-	if p, ok := peer.FromContext(ctx); ok {
-		log.Printf("client at ip: %s connected\n", p.Addr)
+	if _, ok := peer.FromContext(ctx); ok {
+		log.Printf("new client connected")
 	}
 	if checkVersion(req.Version) {
 		sv := fmt.Sprintf("%d.%d.%d", uint8(version>>16&0xFF), uint8(version>>8&0xFF), uint8(version&0xFF))
@@ -77,7 +77,6 @@ func (s *server) Join(ctx context.Context, req *pb.JoinReq) (*pb.JoinAck, error)
 }
 
 func (s *server) WaitPeer(ctx context.Context, req *pb.WaitReq) (*pb.PeerInfo, error) {
-
 	var player1 bool
 	var ready chan struct{}
 	var matchKey string
@@ -116,20 +115,32 @@ func (s *server) WaitPeer(ctx context.Context, req *pb.WaitReq) (*pb.PeerInfo, e
 			s.rooms[matchKey] = Room{p1: s.rooms[matchKey].p1, p2: nil, ready: s.rooms[matchKey].ready}
 		}
 		s.mu.Unlock()
-
 		return nil, fmt.Errorf("client Disconnected")
 	}
+	defer s.cleanRoom(matchKey)
+	info := s.rooms[matchKey]
 	if player1 {
-		return &pb.PeerInfo{Ip: string(s.rooms[matchKey].p2.addr.IP), Port: uint32(s.rooms[matchKey].p2.addr.Port), Start: true}, nil
+		return &pb.PeerInfo{Ip: info.p2.addr.IP.String(), Port: uint32(info.p2.addr.Port), Start: true}, nil
 	} else {
-		return &pb.PeerInfo{Ip: string(s.rooms[matchKey].p1.addr.IP), Port: uint32(s.rooms[matchKey].p1.addr.Port), Start: false}, nil
+		return &pb.PeerInfo{Ip: info.p1.addr.IP.String(), Port: uint32(info.p1.addr.Port), Start: false}, nil
+	}
+}
+
+func (s *server) cleanRoom(key string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r := s.rooms[key]
+	r.fin++
+	s.rooms[key] = r
+	if s.rooms[key].fin >= 2 {
+		log.Printf("Game: %s started!", key)
+		delete(s.rooms, key)
 	}
 }
 
 func udpLoop(conn *net.UDPConn, s *server) {
 	buf := make([]byte, 1500)
 	for {
-		time.Sleep(10 * time.Millisecond)
 		n, addr, err := conn.ReadFromUDP(buf)
 		if err != nil {
 			log.Printf("udp read: %v", err)
@@ -137,16 +148,19 @@ func udpLoop(conn *net.UDPConn, s *server) {
 		}
 		token := string(buf[:n])
 		log.Printf("udp from %s (%d bytes)", addr, n)
-
 		s.mu.Lock()
-		for _, room := range s.rooms {
-			if room.p1.token == token {
+		for k, room := range s.rooms {
+			switch token {
+			case room.p1.token:
 				room.p1.addr = addr
-			} else if room.p2.token == token {
+			case room.p2.token:
 				room.p2.addr = addr
 			}
-			if room.p1.addr != nil && room.p2.addr != nil {
-				close(room.ready)
+			if room.p1 != nil && room.p2 != nil {
+				if room.p1.addr != nil && room.p2.addr != nil {
+					log.Printf("Room: %s is ready!", k)
+					close(room.ready)
+				}
 			}
 		}
 		s.mu.Unlock()
