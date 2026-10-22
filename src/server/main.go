@@ -103,7 +103,10 @@ func (s *server) WaitPeer(ctx context.Context, req *pb.WaitReq) (*pb.PeerInfo, e
 		s.mu.Lock()
 		if player1 { // delete p1 and put p2 into p1
 			if s.rooms[matchKey].p2 != nil {
-				s.rooms[matchKey] = Room{p1: s.rooms[matchKey].p2, p2: nil, ready: s.rooms[matchKey].ready}
+				s.rooms[matchKey] = Room{
+					p1:    s.rooms[matchKey].p2,
+					p2:    nil,
+					ready: s.rooms[matchKey].ready}
 				log.Printf("player 1 left room: %s", matchKey)
 			} else {
 				delete(s.rooms, matchKey)
@@ -116,11 +119,10 @@ func (s *server) WaitPeer(ctx context.Context, req *pb.WaitReq) (*pb.PeerInfo, e
 
 		return nil, fmt.Errorf("client Disconnected")
 	}
-
 	if player1 {
 		return &pb.PeerInfo{Ip: string(s.rooms[matchKey].p2.addr.IP), Port: uint32(s.rooms[matchKey].p2.addr.Port), Start: true}, nil
 	} else {
-		return &pb.PeerInfo{Ip: string(s.rooms[matchKey].p1.addr.IP), Port: uint32(s.rooms[matchKey].p1.addr.Port), Start: true}, nil
+		return &pb.PeerInfo{Ip: string(s.rooms[matchKey].p1.addr.IP), Port: uint32(s.rooms[matchKey].p1.addr.Port), Start: false}, nil
 	}
 }
 
@@ -133,14 +135,14 @@ func udpLoop(conn *net.UDPConn, s *server) {
 			log.Printf("udp read: %v", err)
 			continue
 		}
-		//token := string(buf[:n])
+		token := string(buf[:n])
 		log.Printf("udp from %s (%d bytes)", addr, n)
 
 		s.mu.Lock()
 		for _, room := range s.rooms {
-			if room.p1.token == string(buf) {
+			if room.p1.token == token {
 				room.p1.addr = addr
-			} else if room.p2.token == string(buf) {
+			} else if room.p2.token == token {
 				room.p2.addr = addr
 			}
 			if room.p1.addr != nil && room.p2.addr != nil {
