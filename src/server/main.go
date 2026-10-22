@@ -169,6 +169,12 @@ func udpLoop(conn *net.UDPConn, s *server) {
 	}
 }
 
+func commands() {
+	for {
+
+	}
+}
+
 func main() {
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
@@ -183,6 +189,7 @@ func main() {
 
 	s := GetServer()
 	go udpLoop(udpConn, s)
+	go commands()
 
 	g := grpc.NewServer()
 	pb.RegisterRendezvousServer(g, s)

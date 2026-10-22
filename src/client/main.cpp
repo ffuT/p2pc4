@@ -3,6 +3,7 @@
 #include <bits/types/struct_timeval.h>
 #include <cerrno>
 #include <chrono>
+#include <complex>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -86,33 +87,42 @@ sockaddr_in peerAddress(const rendezvous::v1::PeerInfo& info) {
 bool holePunch(int fd, const sockaddr_in& peer) {
     auto wait = std::chrono::high_resolution_clock::now() + std::chrono::seconds(10);
     std::string punch = "PUNCH";
+    bool pa = false;
+    uint quiet = 0;
     while (wait > std::chrono::high_resolution_clock::now()) {
+        if(!pa){
             sendto(fd, punch.data(), punch.size(), 0, (sockaddr*)&peer, sizeof(peer));
-            char buf[64];
-            sockaddr from{};
-            socklen_t fromLen = sizeof(from);
-            ssize_t n = recvfrom(fd, buf, sizeof(buf), 0, (sockaddr*)&from, &fromLen);
-            if( n < 0) {
-                if(errno == EAGAIN || errno == EWOULDBLOCK) // eh what? 
-                    continue;
-                return false;
+            quiet = 0;
+        }
+        char buf[64];
+        sockaddr from{};
+        socklen_t fromLen = sizeof(from);
+        ssize_t n = recvfrom(fd, buf, sizeof(buf), 0, (sockaddr*)&from, &fromLen);
+        if( n < 0) {
+            if(errno == EAGAIN || errno == EWOULDBLOCK){ // didnt receive any packet
+                quiet++;
+                if(quiet == 5)
+                    break;
+                continue;
             }
-            if(from.sa_family != AF_INET)
-                return false;
-            if(((sockaddr_in*)&from)->sin_addr.s_addr == peer.sin_addr.s_addr){
-                auto data = std::string(buf); 
-                if(data == "PUNCH"){
-                    punch = std::string("PUNCHACK");
-                    printf("Received Punch from peer!\n");    
-                } else if(data == "PUNCHACK"){
-                    printf("Hole Punch Success!\n");
-                    return true;
-                }
+            return false;
+        }
+        if(from.sa_family != AF_INET)
+            return false;
+        if(((sockaddr_in*)&from)->sin_addr.s_addr == peer.sin_addr.s_addr){
+            auto data = std::string(buf); 
+            if(data == "PUNCH"){
+                auto punchack = std::string("PUNCHACK");
+                sendto(fd, punchack.data(), punchack.size(), 0, (sockaddr*)&peer, sizeof(peer));
+                quiet = 0;
+            } else if(data == "PUNCHACK"){
+                pa = true;
             }
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
-    printf("Session Timed Out\n");
-    return false;
+    pa ? printf("Hole Punch Success!\n") : printf("Session Timed Out\n");
+    return pa;
 }
 
 int main() {
