@@ -29,8 +29,8 @@ type Player struct {
 }
 
 type Room struct {
-	p1    Player
-	p2    Player
+	p1    *Player
+	p2    *Player
 	ready chan struct{}
 }
 
@@ -60,11 +60,15 @@ func (s *server) Join(ctx context.Context, req *pb.JoinReq) (*pb.JoinAck, error)
 	rand.Read(tok)
 	s.mu.Lock()
 	if value, ok := s.rooms[req.Room]; ok { // room exists
-		value.p2 = Player{token: string(tok), addr: nil}
+		if value.p1 != nil && value.p2 != nil {
+			log.Printf("room: %s is full", req.Room)
+			return nil, fmt.Errorf("room: %s is full", req.Room)
+		}
+		value.p2 = &Player{token: string(tok), addr: nil}
 		s.rooms[req.Room] = value
 		log.Printf("room: %s is full", req.Room)
 	} else { // room doesnt exist
-		s.rooms[req.Room] = Room{p1: Player{token: string(tok), addr: nil}, ready: make(chan struct{})}
+		s.rooms[req.Room] = Room{p1: &Player{token: string(tok), addr: nil}, p2: nil, ready: make(chan struct{})}
 		log.Printf("created room: %s", req.Room)
 	}
 	s.mu.Unlock()
@@ -76,18 +80,17 @@ func (s *server) WaitPeer(ctx context.Context, req *pb.WaitReq) (*pb.PeerInfo, e
 
 	var player1 bool
 	var ready chan struct{}
-	var matchRoom Room
+	var matchKey string
 	s.mu.Lock()
-	for _, room := range s.rooms {
+	for key, room := range s.rooms {
+		matchKey = key
 		if room.p1.token == string(req.Token) {
 			ready = room.ready
 			player1 = true
-			matchRoom = room
 			break
 		} else if room.p2.token == string(req.Token) {
 			player1 = false
 			ready = room.ready
-			matchRoom = room
 			break
 		}
 	}
@@ -97,14 +100,27 @@ func (s *server) WaitPeer(ctx context.Context, req *pb.WaitReq) (*pb.PeerInfo, e
 	case <-ready:
 	case <-ctx.Done():
 		log.Print("client disconnected")
-		// delete player
+		s.mu.Lock()
+		if player1 { // delete p1 and put p2 into p1
+			if s.rooms[matchKey].p2 != nil {
+				s.rooms[matchKey] = Room{p1: s.rooms[matchKey].p2, p2: nil, ready: s.rooms[matchKey].ready}
+				log.Printf("player 1 left room: %s", matchKey)
+			} else {
+				delete(s.rooms, matchKey)
+				log.Printf("deleted room: %s", matchKey)
+			}
+		} else { // delete player 2
+			s.rooms[matchKey] = Room{p1: s.rooms[matchKey].p1, p2: nil, ready: s.rooms[matchKey].ready}
+		}
+		s.mu.Unlock()
+
 		return nil, fmt.Errorf("client Disconnected")
 	}
 
 	if player1 {
-		return &pb.PeerInfo{Ip: string(matchRoom.p2.addr.IP), Port: uint32(matchRoom.p2.addr.Port), Start: true}, nil
+		return &pb.PeerInfo{Ip: string(s.rooms[matchKey].p2.addr.IP), Port: uint32(s.rooms[matchKey].p2.addr.Port), Start: true}, nil
 	} else {
-		return &pb.PeerInfo{Ip: string(matchRoom.p1.addr.IP), Port: uint32(matchRoom.p1.addr.Port), Start: true}, nil
+		return &pb.PeerInfo{Ip: string(s.rooms[matchKey].p1.addr.IP), Port: uint32(s.rooms[matchKey].p1.addr.Port), Start: true}, nil
 	}
 }
 
@@ -120,7 +136,18 @@ func udpLoop(conn *net.UDPConn, s *server) {
 		//token := string(buf[:n])
 		log.Printf("udp from %s (%d bytes)", addr, n)
 
-		// todo find player by token and connect
+		s.mu.Lock()
+		for _, room := range s.rooms {
+			if room.p1.token == string(buf) {
+				room.p1.addr = addr
+			} else if room.p2.token == string(buf) {
+				room.p2.addr = addr
+			}
+			if room.p1.addr != nil && room.p2.addr != nil {
+				close(room.ready)
+			}
+		}
+		s.mu.Unlock()
 
 		conn.WriteToUDP([]byte("OK"), addr)
 	}
