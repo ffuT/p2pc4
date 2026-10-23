@@ -3,7 +3,6 @@
 #include <bits/types/struct_timeval.h>
 #include <cerrno>
 #include <chrono>
-#include <complex>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -100,8 +99,7 @@ bool holePunch(int fd, const sockaddr_in& peer) {
         ssize_t n = recvfrom(fd, buf, sizeof(buf), 0, (sockaddr*)&from, &fromLen);
         if( n < 0) {
             if(errno == EAGAIN || errno == EWOULDBLOCK){ // didnt receive any packet
-                quiet++;
-                if(quiet == 5)
+                if(quiet++ >= 5)
                     break;
                 continue;
             }
@@ -125,8 +123,25 @@ bool holePunch(int fd, const sockaddr_in& peer) {
     return pa;
 }
 
-int main() {
-    auto channel = grpc::CreateChannel("localhost:50051", grpc::InsecureChannelCredentials());
+int main(int argc, char* argv[]) {
+    std::string ip = "localhost";
+    std::string tcp = "50051";
+    std::string udp = "50052";
+    for(int i = 1; i < argc; i+= 2) {
+        auto arg = std::string(argv[i]);
+        if (i+1 >= argc) arg = "-h";
+        if (arg == "-ip") ip = argv[i+1];
+        if (arg == "-tcp") tcp = argv[i+1];
+        if (arg == "-upd") udp = argv[i+1];
+        if (arg == "-h") {
+            printf("    -ip string \n        ip to connect (default localhost)\n");
+            printf("    -tcp int \n        tcp port (default 50051)\n");
+            printf("    -upd int \n        ucp port (default 50052)\n");
+            return EXIT_SUCCESS;
+        }
+    }
+
+    auto channel = grpc::CreateChannel((ip + ":" + tcp), grpc::InsecureChannelCredentials());
     auto stub = rendezvous::v1::Rendezvous::NewStub(channel);
 
     int fd = createUdpSocket();
@@ -134,7 +149,7 @@ int main() {
         std::printf("Failure to Create Socket\n");
         return EXIT_FAILURE;
     }
-    sockaddr_in server = resolveUdp("localhost", "50052");
+    sockaddr_in server = resolveUdp(ip.c_str(), udp.c_str());
 
     grpc::ClientContext joinCtx;
     rendezvous::v1::JoinReq joinReq;

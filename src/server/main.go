@@ -4,10 +4,12 @@ import (
 	"bufio"
 	"context"
 	"crypto/rand"
+	"flag"
 	"fmt"
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -186,21 +188,38 @@ func commands() {
 		case "exit", "quit", "shutdown":
 			log.Printf("Server Shutting Down!")
 			os.Exit(0)
+		case "list":
+			if len(args) <= 1 {
+				log.Printf("usage: list [what]")
+				continue
+			}
+			switch args[1] {
+			case "players":
+
+			case "rooms":
+			}
+
+		default:
+			log.Printf("Command Not Found: %s", args[0])
 		}
 	}
 }
 
 func main() {
-	lis, err := net.Listen("tcp", ":50051")
+	tcpPort := flag.Int("tcp", 50051, "tcp port")
+	updPort := flag.Int("udp", 50052, "udp port")
+	flag.Parse()
+
+	lis, err := net.Listen("tcp", ":"+strconv.Itoa(*tcpPort))
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("server listening tcp on :50051...\n")
-	udpConn, err := net.ListenUDP("udp", &net.UDPAddr{Port: 50052})
+	fmt.Printf("server listening tcp on :%d...\n", *tcpPort)
+	udpConn, err := net.ListenUDP("udp", &net.UDPAddr{Port: *updPort})
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("server listening udp on :50052...\n")
+	fmt.Printf("server listening udp on :%d...\n", *updPort)
 
 	s := GetServer()
 	go udpLoop(udpConn, s)
