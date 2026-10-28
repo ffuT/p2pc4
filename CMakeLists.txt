@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.25)
 project(connect4 LANGUAGES CXX)
 
+if(WIN32)
+    target_link_libraries(connect4 PRIVATE ws2_32)
+    target_compile_definitions(connect4 PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+endif()
+
 find_package(protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 
