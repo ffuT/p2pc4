@@ -67,6 +67,7 @@ func (s *server) Join(ctx context.Context, req *pb.JoinReq) (*pb.JoinAck, error)
 	if value, ok := s.rooms[req.Room]; ok { // room exists
 		if value.p1 != nil && value.p2 != nil {
 			log.Printf("room: %s is full", req.Room)
+			s.mu.Unlock()
 			return nil, fmt.Errorf("room: %s is full", req.Room)
 		}
 		value.p2 = &Player{token: string(tok), addr: nil}
@@ -97,6 +98,8 @@ func (s *server) WaitPeer(ctx context.Context, req *pb.WaitReq) (*pb.PeerInfo, e
 			ready = room.ready
 			break
 		}
+		s.mu.Unlock()
+		return nil, fmt.Errorf("invalid token!")
 	}
 	s.mu.Unlock()
 
@@ -155,10 +158,9 @@ func udpLoop(conn *net.UDPConn, s *server) {
 		log.Printf("udp from %s (%d bytes)", addr, n)
 		s.mu.Lock()
 		for k, room := range s.rooms {
-			switch token {
-			case room.p1.token:
+			if room.p1.token == token {
 				room.p1.addr = addr
-			case room.p2.token:
+			} else if room.p2 != nil && room.p2.token == token {
 				room.p2.addr = addr
 			}
 			if room.p1 != nil && room.p2 != nil {

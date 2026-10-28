@@ -61,7 +61,7 @@ bool registerUdp(int fd, const sockaddr_in& server, const std::string& token) {
         socklen_t fromLen = sizeof(from);
         ssize_t n = recvfrom(fd, buf, sizeof(buf), 0, (sockaddr*)&from, &fromLen);
         if( n < 0){
-            if(errno == EAGAIN || errno == EWOULDBLOCK) // eh what? 
+            if(errno == EAGAIN || errno == EWOULDBLOCK)
                 continue;
             return false;
         }
@@ -106,7 +106,7 @@ bool holePunch(int fd, const sockaddr_in& peer) {
             return false;
         }
         if(from.sa_family != AF_INET)
-            return false;
+            continue;
         if(((sockaddr_in*)&from)->sin_addr.s_addr == peer.sin_addr.s_addr){
             auto data = std::string(buf, n); 
             if(data == "PUNCH"){
@@ -129,18 +129,19 @@ int main(int argc, char* argv[]) {
     std::string udp = "50052";
     for(int i = 1; i < argc; i+= 2) {
         auto arg = std::string(argv[i]);
-        if (i+1 >= argc) arg = "-h";
-        if (arg == "-ip") ip = argv[i+1];
-        if (arg == "-tcp") tcp = argv[i+1];
-        if (arg == "-upd") udp = argv[i+1];
-        if (arg == "-h") {
-            printf("    -ip string \n        ip to connect (default localhost)\n");
-            printf("    -tcp int \n        tcp port (default 50051)\n");
-            printf("    -upd int \n        ucp port (default 50052)\n");
+        if(argc <= 2) arg = "-h";
+        if (arg == "--ip") ip = argv[i+1];
+        else if (arg == "--tcp") tcp = argv[i+1];
+        else if (arg == "--udp") udp = argv[i+1];
+        else {
+            printf("    --ip string \n        ip to connect (default localhost)\n");
+            printf("    --tcp int \n        tcp port (default 50051)\n");
+            printf("    --upd int \n        ucp port (default 50052)\n");
             return EXIT_SUCCESS;
         }
     }
 
+    printf("trying tcp on %s:%s\n",ip.c_str(), tcp.c_str());
     auto channel = grpc::CreateChannel((ip + ":" + tcp), grpc::InsecureChannelCredentials());
     auto stub = rendezvous::v1::Rendezvous::NewStub(channel);
 
@@ -149,6 +150,7 @@ int main(int argc, char* argv[]) {
         std::printf("Failure to Create Socket\n");
         return EXIT_FAILURE;
     }
+    printf("trying udp on %s:%s\n",ip.c_str(), udp.c_str());
     sockaddr_in server = resolveUdp(ip.c_str(), udp.c_str());
 
     grpc::ClientContext joinCtx;
@@ -166,7 +168,7 @@ int main(int argc, char* argv[]) {
     std::printf("\n");
 
     if (!registerUdp(fd, server, joinResp.token()))
-        std::runtime_error("Failed to Register udp!");
+        throw std::runtime_error("Failed to Register udp!");
 
     grpc::ClientContext waitCtx;
     rendezvous::v1::WaitReq waitReq;
