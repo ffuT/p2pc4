@@ -24,7 +24,7 @@ protobuf_generate(TARGET rendezvous_proto
     IMPORT_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/proto)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE})
-add_executable(connect4 src/client/main.cpp)
+add_executable(connect4 src/client/main.cpp src/client/net.cpp)
 
 if(UNIX)
     target_link_options(connect4 PRIVATE $<$<CONFIG:Release>:-static-libstdc++ -static-libgcc>)
