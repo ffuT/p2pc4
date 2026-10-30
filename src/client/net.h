@@ -6,8 +6,8 @@
 
 class Net {
     public:
-    Net(){};
-    ~Net(){};
+    Net();
+    ~Net();
 
     bool init(const std::string& ip,
         const std::string& tcp,
@@ -19,9 +19,11 @@ class Net {
     void poll();
     
     private:
-
-    void createUdpSocket();
+    int createUdpSocket();
+    bool registerUdp(const sockaddr_in& addr, const std::string& token);
+    sockaddr_in resolveUdp(const char* host, const char* port);
     void peerAddress(const rendezvous::v1::PeerInfo&);
+    bool holePunch();
 
     int m_fd;
     sockaddr_in peer{};

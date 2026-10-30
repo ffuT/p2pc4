@@ -24,8 +24,11 @@ int main(int argc, char* argv[]) {
     Net net = Net();
     if(!net.init(ip, tcp, udp, version))
         return EXIT_FAILURE;
-   
-    // TODO UDP 5 (later): holePunch(fd, peer); then moves/acks/keepalives over the same fd
-    // TODO UDP 6: close(fd) when the game is over
+    
+    while (true) {
+        net.sendHover();
+        net.poll();
+    }
+
     return EXIT_SUCCESS;
 }

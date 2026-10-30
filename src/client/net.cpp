@@ -1,10 +1,12 @@
 #include "net.h"
 
+#include <algorithm>
 #include <arpa/inet.h>
 #include <asm-generic/socket.h>
 #include <bits/types/struct_timeval.h>
 #include <cerrno>
 #include <chrono>
+#include <cstddef>
 #include <cstdio>
 #include <cstring>
 #include <netdb.h>
@@ -21,22 +23,23 @@
 #include <grpcpp/support/status.h>
 #include <grpcpp/grpcpp.h>
 
-void Net::createUdpSocket() {
-    m_fd = socket(AF_INET, SOCK_DGRAM, 0);
+int Net::createUdpSocket() {
+    int fd = socket(AF_INET, SOCK_DGRAM, 0);
     sockaddr_in local{};
     local.sin_family = AF_INET;
     local.sin_addr.s_addr = htonl(INADDR_ANY);
     local.sin_port = htons(0);
-    int rv = bind(m_fd, reinterpret_cast<sockaddr*>(&local), sizeof(local));
+    int rv = bind(fd, reinterpret_cast<sockaddr*>(&local), sizeof(local));
     if(rv == -1)
-        throw std::runtime_error("failed to create udp socket");
+        return -1;    
 
     timeval tv(0, 500'000);
-    setsockopt(m_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
     printf("Created Socket!\n");
+    return fd;
 }
 
-sockaddr_in resolveUdp(const char* host, const char* port) {
+sockaddr_in Net::resolveUdp(const char* host, const char* port) {
     addrinfo hints{};
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_DGRAM;
@@ -52,13 +55,13 @@ sockaddr_in resolveUdp(const char* host, const char* port) {
     return addr;
 }
 
-bool registerUdp(int fd, const sockaddr_in& server, const std::string& token) {
+bool Net::registerUdp(const sockaddr_in& server, const std::string& token) {
     for(int i = 0; i < 10; i++){
-        sendto(fd, token.data(), token.size(), 0, (sockaddr*)&server, sizeof(server));
+        sendto(m_fd, token.data(), token.size(), 0, (sockaddr*)&server, sizeof(server));
         char buf[64];
         sockaddr from{};
         socklen_t fromLen = sizeof(from);
-        ssize_t n = recvfrom(fd, buf, sizeof(buf), 0, (sockaddr*)&from, &fromLen);
+        ssize_t n = recvfrom(m_fd, buf, sizeof(buf), 0, (sockaddr*)&from, &fromLen);
         if( n < 0){
             if(errno == EAGAIN || errno == EWOULDBLOCK)
                 continue;
@@ -80,20 +83,20 @@ void Net::peerAddress(const rendezvous::v1::PeerInfo& info) {
     }
 }
 
-bool holePunch(int fd, const sockaddr_in& peer) {
+bool Net::holePunch() {
     auto wait = std::chrono::steady_clock::now() + std::chrono::seconds(10);
     std::string punch = "PUNCH";
     bool pa = false;
     uint quiet = 0;
     while (wait > std::chrono::steady_clock::now()) {
         if(!pa){
-            sendto(fd, punch.data(), punch.size(), 0, (sockaddr*)&peer, sizeof(peer));
+            sendto(m_fd, punch.data(), punch.size(), 0, (sockaddr*)&peer, sizeof(peer));
             quiet = 0;
         }
         char buf[64]{};
         sockaddr from{};
         socklen_t fromLen = sizeof(from);
-        ssize_t n = recvfrom(fd, buf, sizeof(buf), 0, (sockaddr*)&from, &fromLen);
+        ssize_t n = recvfrom(m_fd, buf, sizeof(buf), 0, (sockaddr*)&from, &fromLen);
         if( n < 0) {
             if(errno == EAGAIN || errno == EWOULDBLOCK){ // didnt receive any packet
                 if(quiet++ >= 5)
@@ -108,7 +111,7 @@ bool holePunch(int fd, const sockaddr_in& peer) {
             auto data = std::string(buf, n); 
             if(data == "PUNCH"){
                 auto punchack = std::string("PUNCHACK");
-                sendto(fd, punchack.data(), punchack.size(), 0, (sockaddr*)&peer, sizeof(peer));
+                sendto(m_fd, punchack.data(), punchack.size(), 0, (sockaddr*)&peer, sizeof(peer));
                 quiet = 0;
             } else if(data == "PUNCHACK"){
                 pa = true;
@@ -125,7 +128,9 @@ printf("trying tcp on %s:%s\n",ip.c_str(), tcp.c_str());
     auto channel = grpc::CreateChannel((ip + ":" + tcp), grpc::InsecureChannelCredentials());
     auto stub = rendezvous::v1::Rendezvous::NewStub(channel);
 
-    createUdpSocket();
+    m_fd = createUdpSocket();
+    if(m_fd == -1)
+        throw std::runtime_error("failed to create udp socket");
 
     printf("trying udp on %s:%s\n",ip.c_str(), udp.c_str());
     sockaddr_in server = resolveUdp(ip.c_str(), udp.c_str());
@@ -144,7 +149,7 @@ printf("trying tcp on %s:%s\n",ip.c_str(), tcp.c_str());
         std::printf("%02x", c);
     std::printf("\n");
 
-    if (!registerUdp(m_fd, server, joinResp.token()))
+    if (!registerUdp(server, joinResp.token()))
         throw std::runtime_error("Failed to Register udp!");
 
     grpc::ClientContext waitCtx;
@@ -158,12 +163,14 @@ printf("trying tcp on %s:%s\n",ip.c_str(), tcp.c_str());
     std::printf("peer ip: %s:%d\n", peerInfo.ip().c_str(), peerInfo.port());
 
     peerAddress(peerInfo);
-    holePunch(m_fd, peer);
-    return true;
+    return holePunch();
 }
 
 void Net::sendHover() {
-    
+    static int s = 0;
+    s++;
+
+    sendto(m_fd, &s, sizeof(s), 0, (sockaddr*)&peer, sizeof(peer));
 }
 
 void Net::sendMove() {
@@ -171,5 +178,25 @@ void Net::sendMove() {
 }
 
 void Net::poll() {
+    char buf[64]{};
+    sockaddr from{};
+    socklen_t fromLen = sizeof(from);
+    ssize_t n = recvfrom(m_fd, buf, sizeof(buf), 0, (sockaddr*)&from, &fromLen);
+    if( n < 0){
+        if(errno == EAGAIN || errno == EWOULDBLOCK)
+            return;   
+        printf("some error idk!");
+        return;
+    }
+    int a;
+    memcpy(&a, buf, sizeof(a));
+    printf("rec: %d\n", a);
+}
 
+Net::Net(){
+
+}
+
+Net::~Net(){
+    close(m_fd);
 }
