@@ -23,6 +23,13 @@ protobuf_generate(TARGET rendezvous_proto
     PLUGIN "protoc-gen-grpc=\$<TARGET_FILE:gRPC::grpc_cpp_plugin>"
     IMPORT_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/proto)
 
+include(FetchContent)
+FetchContent_Declare(ftxui
+  GIT_REPOSITORY https://github.com/ArthurSonzogni/ftxui
+  GIT_TAG v7.0.3
+)
+FetchContent_MakeAvailable(ftxui)
+
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE})
 add_executable(connect4 src/client/main.cpp src/client/net.cpp)
 
@@ -32,5 +39,6 @@ endif()
 
 target_compile_features(connect4 PRIVATE cxx_std_20)
 target_link_libraries(connect4 PRIVATE rendezvous_proto)
+target_link_libraries(connect4 PRIVATE ftxui::ftxui)
 
 set_target_properties(rendezvous_proto connect4 PROPERTIES CXX_EXTENSIONS OFF)

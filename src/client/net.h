@@ -4,6 +4,8 @@
 #include <netinet/in.h>
 #include <string>
 
+#define printf(fmt, ...) ((void)0)
+
 class Net {
     public:
     Net();

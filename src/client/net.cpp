@@ -1,12 +1,10 @@
 #include "net.h"
 
-#include <algorithm>
 #include <arpa/inet.h>
 #include <asm-generic/socket.h>
 #include <bits/types/struct_timeval.h>
 #include <cerrno>
 #include <chrono>
-#include <cstddef>
 #include <cstdio>
 #include <cstring>
 #include <netdb.h>
@@ -144,10 +142,10 @@ printf("trying tcp on %s:%s\n",ip.c_str(), tcp.c_str());
     grpc::Status JoinStatus = stub->Join(&joinCtx, joinReq, &joinResp);
     if(!JoinStatus.ok())
         throw std::runtime_error(JoinStatus.error_message().c_str());
-    std::printf("token: ");
+    printf("token: ");
     for(unsigned char c : joinResp.token())
-        std::printf("%02x", c);
-    std::printf("\n");
+        printf("%02x", c);
+    printf("\n");
 
     if (!registerUdp(server, joinResp.token()))
         throw std::runtime_error("Failed to Register udp!");
@@ -160,7 +158,7 @@ printf("trying tcp on %s:%s\n",ip.c_str(), tcp.c_str());
     grpc::Status waitStatus = stub->WaitPeer(&waitCtx, waitReq, &peerInfo);
     if(!waitStatus.ok())
         throw std::runtime_error(waitStatus.error_message().c_str());
-    std::printf("peer ip: %s:%d\n", peerInfo.ip().c_str(), peerInfo.port());
+    printf("peer ip: %s:%d\n", peerInfo.ip().c_str(), peerInfo.port());
 
     peerAddress(peerInfo);
     return holePunch();
