@@ -9,6 +9,8 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -200,6 +202,15 @@ func commands() {
 
 			case "rooms":
 			}
+		case "clear":
+			var cmd *exec.Cmd
+			if runtime.GOOS == "windows" {
+				cmd = exec.Command("cmd", "/c", "cls")
+			} else {
+				cmd = exec.Command("clear")
+			}
+			cmd.Stdout = os.Stdout
+			cmd.Run()
 
 		default:
 			log.Printf("Command Not Found: %s", args[0])
