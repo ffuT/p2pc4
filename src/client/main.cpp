@@ -12,6 +12,8 @@
 
 constexpr uint32_t version = (1 << 16) | (0 << 8) | 0; // 1.0.0
 
+constexpr int rows = 6, cols = 7;
+
 int main(int argc, char* argv[]) {
     
     int page = 0;
@@ -48,15 +50,49 @@ int main(int argc, char* argv[]) {
         }) | border | size(WIDTH, EQUAL, 40) | center;
     });
 
+    // loading doesnt show while single threaded
     Component loading = Renderer({Container::Horizontal({})},[&]{
         return vbox({
             text("loading")
         })| border | size(WIDTH, EQUAL, 40) | center;
     });
-    Component game = Renderer({Container::Horizontal({})},[&]{
-        return vbox({
-            text("gaming!")
-        })| border | size(WIDTH, EQUAL, 40) | center;
+    uint current = 0;
+    auto gameView = Renderer([&](bool){
+        Elements rowsE;
+
+        Elements select;
+        for (int s = 0; s < cols; s++){
+            if (s == current){
+                select.push_back(text(" # ") | dim | center | borderEmpty);
+                continue;;
+            }
+            select.push_back(text("   ") | dim | center | borderEmpty);
+        }
+        rowsE.push_back(hbox(select) | center);
+
+        for(int r = 0; r < rows; r++){
+            Elements line;
+            for(int c = 0; c < cols; c++){
+               
+                line.push_back(text(" . ") | dim | border | center);
+            } 
+            rowsE.push_back(hbox(line) | center);
+        }
+
+        rowsE.push_back(separator());
+        return vbox(rowsE)| border | size(WIDTH, EQUAL, 40) | center;
+    });
+
+    auto game = CatchEvent(gameView, [&](Event e){
+        if(e == Event::ArrowLeft) {
+            current = current-1 < rows ? current-1 : rows;
+            return true;
+        }
+        if(e == Event::ArrowRight) {
+            current = current+1 <= rows ? current+1 : 0;
+            return true;
+        }
+        return false;
     });
 
     auto root = Container::Tab({menu, loading, game}, &page);
