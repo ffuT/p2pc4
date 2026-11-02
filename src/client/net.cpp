@@ -10,6 +10,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <stdexcept>
+#include <stop_token>
 #include <string>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -152,6 +153,7 @@ printf("trying tcp on %s:%s\n",ip.c_str(), tcp.c_str());
         throw std::runtime_error("Failed to Register udp!");
 
     grpc::ClientContext waitCtx;
+    //std::stop_callback onStop(st, [&]{waitCtx.TryCancel();});
     rendezvous::v1::WaitReq waitReq;
     waitReq.set_token(joinResp.token());
     rendezvous::v1::PeerInfo peerInfo;
@@ -180,7 +182,7 @@ bool Net::sendMove() {
     return false; // no ack received
 }
 
-bool Net::waitMove(){
+bool Net::pollMove(){
     // keep waiting for move
 
     //send ack when received

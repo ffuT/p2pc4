@@ -12,7 +12,6 @@ public:
     void start();
 
 private:
-
     Net m_net;
     std::string m_ip = "localhost", m_tcp = "50051", m_udp = "50052";
     int m_page = 0;

@@ -6,17 +6,16 @@
 #include <ftxui/component/component_options.hpp>
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/component/screen_interactive.hpp>
+#include <stop_token>
 #include <thread>
 
 constexpr uint32_t version = (1 << 16) | (0 << 8) | 0; // 1.0.0
 constexpr int rows = 6, cols = 7;
 
 Game::Game() {
-
 }
 
 Game::~Game(){
-
 }
 
 void Game::start() {
@@ -31,9 +30,15 @@ void Game::start() {
     Component udpIn  = Input(&m_udp, "upd port", single);
     Component connect = Button("connect", [&] { 
         m_page = 1;
-        if(!m_net.init(m_ip, m_tcp, m_udp, version))
-            printf("failed to init Net!\n");
-        m_page = 2;
+        // TODO give another st to stop on Esc
+        std::jthread t([&](std::stop_token st) { 
+            bool ok = m_net.init(m_ip, m_tcp, m_udp, version);
+            if(ok)
+                m_page = 2;
+            else
+                m_page = 0;
+        });
+        t.detach();
     });
 
     auto menuLayout = Container::Horizontal({ipIn, tcpIn, udpIn, connect});
@@ -47,9 +52,7 @@ void Game::start() {
             connect->Render() | center
         }) | border | size(WIDTH, EQUAL, 40) | center;
     });
-
-    // loading doesnt show while single threaded
-    Component loading = Renderer({Container::Horizontal({})},[&]{
+    Component loading = Renderer([&] {
         return vbox({
             text("loading")
         })| border | size(WIDTH, EQUAL, 40) | center;
@@ -101,8 +104,8 @@ void Game::start() {
     auto root = Container::Tab({menu, loading, game}, &m_page);
     m_loop.emplace(&m_screen.value(), root);
     while (!m_loop->HasQuitted()) {
-        m_loop->RunOnce();
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
+        m_loop->RunOnce();
         if(m_page == 2) {
             m_net.sendHover(m_currentPos);
             if(!m_net.poll(m_oppPos)){

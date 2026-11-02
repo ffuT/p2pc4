@@ -25,7 +25,7 @@ class Net {
     void sendHover(uint8_t pos); // non-important game state info
     bool poll(uint8_t& opPos);
     bool sendMove(); // reliable important game move info
-    bool waitMove();
+    bool pollMove();
     
     private:
     int createUdpSocket();
