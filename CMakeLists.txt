@@ -31,7 +31,7 @@ FetchContent_Declare(ftxui
 FetchContent_MakeAvailable(ftxui)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE})
-add_executable(connect4 src/client/main.cpp src/client/net.cpp)
+add_executable(connect4 src/client/main.cpp src/client/net.cpp src/client/game.cpp)
 
 if(UNIX)
     target_link_options(connect4 PRIVATE $<$<CONFIG:Release>:-static-libstdc++ -static-libgcc>)

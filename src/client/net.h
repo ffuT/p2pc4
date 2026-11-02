@@ -1,5 +1,6 @@
 #pragma once
 #include "rendezvous.pb.h"
+#include <chrono>
 #include <cstdint>
 #include <netinet/in.h>
 #include <string>
@@ -10,10 +11,6 @@ struct packet {
     uint32_t time;
     uint8_t pos;
 };
-
-namespace hej {
-    const int h = 1;
-}
 
 class Net {
     public:
@@ -26,7 +23,7 @@ class Net {
         uint32_t version);
 
     void sendHover(uint8_t pos); // non-important game state info
-    void poll(uint8_t& opPos );
+    bool poll(uint8_t& opPos);
     bool sendMove(); // reliable important game move info
     bool waitMove();
     
@@ -39,6 +36,7 @@ class Net {
 
     uint32_t m_time = 0;
     uint32_t m_oppTime = 0;
+    std::chrono::time_point<std::chrono::steady_clock> m_oppTimeout;
     int m_fd;
     sockaddr_in peer{};
 };

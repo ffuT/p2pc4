@@ -118,6 +118,7 @@ bool Net::holePunch() {
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
     pa ? printf("Hole Punch Success!\n") : printf("Session Timed Out\n");
+    m_oppTimeout = std::chrono::steady_clock().now();
     return pa;
 }
 
@@ -187,9 +188,9 @@ bool Net::waitMove(){
     return false;
 }
 
-void Net::poll(uint8_t& opPos) {
-    
-    // TODO detect opponent timeout
+bool Net::poll(uint8_t& opPos) {
+    if (m_oppTimeout + std::chrono::seconds(5) < std::chrono::steady_clock().now())
+        return false; // stopped receiving
     
     char buf[64]{};
     sockaddr from{};
@@ -197,16 +198,18 @@ void Net::poll(uint8_t& opPos) {
     ssize_t n = recvfrom(m_fd, buf, sizeof(buf), 0, (sockaddr*)&from, &fromLen);
     if( n < 0){
         if(errno == EAGAIN || errno == EWOULDBLOCK)
-            return;   
+            return true;
         printf("some error idk!");
-        return;
+        return false; // got an error
     }
     packet p;
     memcpy(&p, buf, sizeof(p));
-    if(m_oppTime > p.time)
-        return;
+    if(m_oppTime > p.time) // discard old packet
+        return true;
+    m_oppTimeout = std::chrono::steady_clock().now();
     m_oppTime = p.time;
     opPos = p.pos;
+    return true;
 }
 
 Net::Net(){

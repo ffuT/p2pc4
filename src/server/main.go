@@ -197,9 +197,9 @@ func commands(s *server) {
 				log.Print("no rooms atm")
 				continue
 			}
+			log.Print("Rooms:")
 			for k := range s.rooms {
-				log.Print("Rooms:")
-				log.Printf("  %s", k)
+				fmt.Printf("    %s", k)
 			}
 		case "clear":
 			var cmd *exec.Cmd
@@ -210,7 +210,6 @@ func commands(s *server) {
 			}
 			cmd.Stdout = os.Stdout
 			cmd.Run()
-
 		default:
 			log.Printf("Command Not Found: %s", args[0])
 		}
