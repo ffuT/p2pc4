@@ -164,18 +164,33 @@ printf("trying tcp on %s:%s\n",ip.c_str(), tcp.c_str());
     return holePunch();
 }
 
-void Net::sendHover() {
-    static int s = 0;
-    s++;
-
-    sendto(m_fd, &s, sizeof(s), 0, (sockaddr*)&peer, sizeof(peer));
+void Net::sendHover(uint8_t pos) {
+    m_time++;
+    packet p{.time = m_time, .pos = pos};
+    sendto(m_fd, &p, sizeof(p), 0, (sockaddr*)&peer, sizeof(peer));
 }
 
-void Net::sendMove() {
+bool Net::sendMove() {
 
+    // keep sending move
+
+    // return when ack received;
+
+    return false; // no ack received
 }
 
-void Net::poll() {
+bool Net::waitMove(){
+    // keep waiting for move
+
+    //send ack when received
+
+    return false;
+}
+
+void Net::poll(uint8_t& opPos) {
+    
+    // TODO detect opponent timeout
+    
     char buf[64]{};
     sockaddr from{};
     socklen_t fromLen = sizeof(from);
@@ -186,9 +201,12 @@ void Net::poll() {
         printf("some error idk!");
         return;
     }
-    int a;
-    memcpy(&a, buf, sizeof(a));
-    printf("rec: %d\n", a);
+    packet p;
+    memcpy(&p, buf, sizeof(p));
+    if(m_oppTime > p.time)
+        return;
+    m_oppTime = p.time;
+    opPos = p.pos;
 }
 
 Net::Net(){

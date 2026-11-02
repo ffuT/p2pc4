@@ -6,6 +6,15 @@
 
 #define printf(fmt, ...) ((void)0)
 
+struct packet {
+    uint32_t time;
+    uint8_t pos;
+};
+
+namespace hej {
+    const int h = 1;
+}
+
 class Net {
     public:
     Net();
@@ -16,9 +25,10 @@ class Net {
         const std::string& udp,
         uint32_t version);
 
-    void sendHover(); // non-important game state info
-    void sendMove(); // reliable important game move info
-    void poll();
+    void sendHover(uint8_t pos); // non-important game state info
+    void poll(uint8_t& opPos );
+    bool sendMove(); // reliable important game move info
+    bool waitMove();
     
     private:
     int createUdpSocket();
@@ -27,6 +37,8 @@ class Net {
     void peerAddress(const rendezvous::v1::PeerInfo&);
     bool holePunch();
 
+    uint32_t m_time = 0;
+    uint32_t m_oppTime = 0;
     int m_fd;
     sockaddr_in peer{};
 };

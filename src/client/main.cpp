@@ -8,6 +8,7 @@
 #include <ftxui/component/loop.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/dom/elements.hpp>
+#include <ftxui/screen/color.hpp>
 #include <thread>
 
 constexpr uint32_t version = (1 << 16) | (0 << 8) | 0; // 1.0.0
@@ -15,7 +16,6 @@ constexpr uint32_t version = (1 << 16) | (0 << 8) | 0; // 1.0.0
 constexpr int rows = 6, cols = 7;
 
 int main(int argc, char* argv[]) {
-    
     int page = 0;
     Net net = Net();
     using namespace ftxui;
@@ -56,7 +56,8 @@ int main(int argc, char* argv[]) {
             text("loading")
         })| border | size(WIDTH, EQUAL, 40) | center;
     });
-    uint current = 0;
+    uint8_t current = 0;
+    uint8_t opp = 0;
     auto gameView = Renderer([&](bool){
         Elements rowsE;
 
@@ -66,6 +67,10 @@ int main(int argc, char* argv[]) {
                 select.push_back(text(" # ") | dim | center | borderEmpty);
                 continue;;
             }
+            if (s == opp){
+                select.push_back(text(" # ") | dim | center | borderEmpty | color(Color::Red));
+                continue;
+            }
             select.push_back(text("   ") | dim | center | borderEmpty);
         }
         rowsE.push_back(hbox(select) | center);
@@ -73,7 +78,6 @@ int main(int argc, char* argv[]) {
         for(int r = 0; r < rows; r++){
             Elements line;
             for(int c = 0; c < cols; c++){
-               
                 line.push_back(text(" . ") | dim | border | center);
             } 
             rowsE.push_back(hbox(line) | center);
@@ -102,8 +106,8 @@ int main(int argc, char* argv[]) {
     while (!loop.HasQuitted()) {
         loop.RunOnce();
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
-        //net.sendHover();
-        //net.poll();
+        net.sendHover(current);
+        net.poll(opp);
     }
 
     return EXIT_SUCCESS;
