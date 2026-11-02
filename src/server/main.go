@@ -65,6 +65,9 @@ func (s *server) Join(ctx context.Context, req *pb.JoinReq) (*pb.JoinAck, error)
 	}
 	tok := make([]byte, 16)
 	rand.Read(tok)
+	if req.Room == "" { // not good but fine for now
+		req.Room = "public"
+	}
 	s.mu.Lock()
 	if value, ok := s.rooms[req.Room]; ok { // room exists
 		if value.p1 != nil && value.p2 != nil {
@@ -108,7 +111,7 @@ func (s *server) WaitPeer(ctx context.Context, req *pb.WaitReq) (*pb.PeerInfo, e
 	select {
 	case <-ready:
 	case <-ctx.Done():
-		log.Print("client disconnected")
+		log.Printf("client disconnected from %s", matchKey)
 		s.mu.Lock()
 		if player1 { // delete p1 and put p2 into p1
 			if s.rooms[matchKey].p2 != nil {
