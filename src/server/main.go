@@ -184,13 +184,16 @@ func udpLoop(conn *net.UDPConn, s *server) {
 func commands(s *server) {
 	var scanner = bufio.NewScanner(os.Stdin)
 	for {
-		scanner.Scan()
+		eof := scanner.Scan()
 		err := scanner.Err()
 		if err != nil {
 			log.Printf("Scanner Broke: %v", err)
+			return
 		}
-
 		args := strings.Split(scanner.Text(), " ")
+		if !eof { // Ctrl+D = EOF
+			args[0] = "exit"
+		}
 		switch args[0] {
 		case "exit", "quit", "shutdown":
 			log.Printf("Server Shutting Down!")
@@ -223,7 +226,7 @@ func main() {
 	tcpPort := flag.Int("tcp", 50051, "tcp port")
 	updPort := flag.Int("udp", 50052, "udp port")
 	flag.Parse()
-
+	log.Println("server started!")
 	lis, err := net.Listen("tcp", ":"+strconv.Itoa(*tcpPort))
 	if err != nil {
 		log.Fatal(err)
