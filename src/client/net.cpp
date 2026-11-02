@@ -1,12 +1,10 @@
 #include "net.h"
 
-#include <algorithm>
 #include <arpa/inet.h>
 #include <asm-generic/socket.h>
 #include <bits/types/struct_timeval.h>
 #include <cerrno>
 #include <chrono>
-#include <cstddef>
 #include <cstdio>
 #include <cstring>
 #include <netdb.h>
@@ -144,10 +142,10 @@ printf("trying tcp on %s:%s\n",ip.c_str(), tcp.c_str());
     grpc::Status JoinStatus = stub->Join(&joinCtx, joinReq, &joinResp);
     if(!JoinStatus.ok())
         throw std::runtime_error(JoinStatus.error_message().c_str());
-    std::printf("token: ");
+    printf("token: ");
     for(unsigned char c : joinResp.token())
-        std::printf("%02x", c);
-    std::printf("\n");
+        printf("%02x", c);
+    printf("\n");
 
     if (!registerUdp(server, joinResp.token()))
         throw std::runtime_error("Failed to Register udp!");
@@ -160,24 +158,39 @@ printf("trying tcp on %s:%s\n",ip.c_str(), tcp.c_str());
     grpc::Status waitStatus = stub->WaitPeer(&waitCtx, waitReq, &peerInfo);
     if(!waitStatus.ok())
         throw std::runtime_error(waitStatus.error_message().c_str());
-    std::printf("peer ip: %s:%d\n", peerInfo.ip().c_str(), peerInfo.port());
+    printf("peer ip: %s:%d\n", peerInfo.ip().c_str(), peerInfo.port());
 
     peerAddress(peerInfo);
     return holePunch();
 }
 
-void Net::sendHover() {
-    static int s = 0;
-    s++;
-
-    sendto(m_fd, &s, sizeof(s), 0, (sockaddr*)&peer, sizeof(peer));
+void Net::sendHover(uint8_t pos) {
+    m_time++;
+    packet p{.time = m_time, .pos = pos};
+    sendto(m_fd, &p, sizeof(p), 0, (sockaddr*)&peer, sizeof(peer));
 }
 
-void Net::sendMove() {
+bool Net::sendMove() {
 
+    // keep sending move
+
+    // return when ack received;
+
+    return false; // no ack received
 }
 
-void Net::poll() {
+bool Net::waitMove(){
+    // keep waiting for move
+
+    //send ack when received
+
+    return false;
+}
+
+void Net::poll(uint8_t& opPos) {
+    
+    // TODO detect opponent timeout
+    
     char buf[64]{};
     sockaddr from{};
     socklen_t fromLen = sizeof(from);
@@ -188,9 +201,12 @@ void Net::poll() {
         printf("some error idk!");
         return;
     }
-    int a;
-    memcpy(&a, buf, sizeof(a));
-    printf("rec: %d\n", a);
+    packet p;
+    memcpy(&p, buf, sizeof(p));
+    if(m_oppTime > p.time)
+        return;
+    m_oppTime = p.time;
+    opPos = p.pos;
 }
 
 Net::Net(){

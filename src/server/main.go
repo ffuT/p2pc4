@@ -9,6 +9,8 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -176,7 +178,7 @@ func udpLoop(conn *net.UDPConn, s *server) {
 	}
 }
 
-func commands() {
+func commands(s *server) {
 	var scanner = bufio.NewScanner(os.Stdin)
 	for {
 		scanner.Scan()
@@ -191,15 +193,23 @@ func commands() {
 			log.Printf("Server Shutting Down!")
 			os.Exit(0)
 		case "list":
-			if len(args) <= 1 {
-				log.Printf("usage: list [what]")
+			if len(s.rooms) == 0 {
+				log.Print("no rooms atm")
 				continue
 			}
-			switch args[1] {
-			case "players":
-
-			case "rooms":
+			for k := range s.rooms {
+				log.Print("Rooms:")
+				log.Printf("  %s", k)
 			}
+		case "clear":
+			var cmd *exec.Cmd
+			if runtime.GOOS == "windows" {
+				cmd = exec.Command("cmd", "/c", "cls")
+			} else {
+				cmd = exec.Command("clear")
+			}
+			cmd.Stdout = os.Stdout
+			cmd.Run()
 
 		default:
 			log.Printf("Command Not Found: %s", args[0])
@@ -225,7 +235,7 @@ func main() {
 
 	s := GetServer()
 	go udpLoop(udpConn, s)
-	go commands()
+	go commands(s)
 
 	g := grpc.NewServer()
 	pb.RegisterRendezvousServer(g, s)
