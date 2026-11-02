@@ -57,6 +57,7 @@ sockaddr_in Net::resolveUdp(const char* host, const char* port) {
 bool Net::registerUdp(const sockaddr_in& server, const std::string& token) {
     for(int i = 0; i < 10; i++){
         sendto(m_fd, token.data(), token.size(), 0, (sockaddr*)&server, sizeof(server));
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
         char buf[64];
         sockaddr from{};
         socklen_t fromLen = sizeof(from);
@@ -116,15 +117,19 @@ bool Net::holePunch() {
                 pa = true;
             }
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        std::this_thread::sleep_for(std::chrono::milliseconds(150));
     }
     pa ? printf("Hole Punch Success!\n") : printf("Session Timed Out\n");
     m_oppTimeout = std::chrono::steady_clock().now();
     return pa;
 }
 
-bool Net::init(const std::string& ip, const std::string& tcp, const std::string& udp, uint32_t version){
-printf("trying tcp on %s:%s\n",ip.c_str(), tcp.c_str());
+bool Net::init(const Net::InitInfo& info, bool& start) {
+    std::string ip = info.ip == "" ? "127.0.0.1" : info.ip;
+    std::string tcp = info.tcp == "" ? "50051" : info.tcp;
+    std::string udp = info.udp == "" ? "50052" : info.udp;
+
+    printf("trying tcp on %s:%s\n",ip.c_str(), tcp.c_str());
     auto channel = grpc::CreateChannel((ip + ":" + tcp), grpc::InsecureChannelCredentials());
     auto stub = rendezvous::v1::Rendezvous::NewStub(channel);
 
@@ -137,8 +142,8 @@ printf("trying tcp on %s:%s\n",ip.c_str(), tcp.c_str());
 
     grpc::ClientContext joinCtx;
     rendezvous::v1::JoinReq joinReq;
-    joinReq.set_version(version);
-    joinReq.set_room("test");
+    joinReq.set_version(info.version);
+    joinReq.set_room(info.room.c_str());
     rendezvous::v1::JoinAck joinResp;
 
     grpc::Status JoinStatus = stub->Join(&joinCtx, joinReq, &joinResp);

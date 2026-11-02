@@ -14,13 +14,18 @@ struct packet {
 
 class Net {
     public:
+    struct InitInfo {
+        const std::string& ip;
+        const std::string& tcp;
+        const std::string& udp;
+        const std::string& room;
+        uint32_t version;
+    };
+
     Net();
     ~Net();
 
-    bool init(const std::string& ip,
-        const std::string& tcp,
-        const std::string& udp,
-        uint32_t version);
+    bool init(const InitInfo& info, bool& start);
 
     void sendHover(uint8_t pos); // non-important game state info
     bool poll(uint8_t& opPos);

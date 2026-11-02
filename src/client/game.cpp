@@ -25,23 +25,25 @@ void Game::start() {
     InputOption single;
     single.multiline = false;
 
-    Component ipIn  = Input(&m_ip, "ip", single);
-    Component tcpIn  = Input(&m_tcp, "tcp port", single);
-    Component udpIn  = Input(&m_udp, "upd port", single);
+    Component ipIn  = Input(&m_ip, "127.0.0.1", single);
+    Component tcpIn  = Input(&m_tcp, "50051", single);
+    Component udpIn  = Input(&m_udp, "50052", single);
+    Component roomIn = Input(&m_room, "room", single);
     Component connect = Button("connect", [&] { 
         m_page = 1;
         // TODO give another st to stop on Esc
         std::jthread t([&](std::stop_token st) { 
-            bool ok = m_net.init(m_ip, m_tcp, m_udp, version);
+            bool ok = m_net.init(Net::InitInfo{m_ip, m_tcp, m_udp, m_room, version}, m_myTurn);
             if(ok)
                 m_page = 2;
             else
                 m_page = 0;
+            m_screen->PostEvent(Event::Custom);
         });
         t.detach();
     });
 
-    auto menuLayout = Container::Horizontal({ipIn, tcpIn, udpIn, connect});
+    auto menuLayout = Container::Horizontal({ipIn, tcpIn, udpIn, roomIn, connect});
     Component menu = Renderer(menuLayout, [&]{
         return vbox({
             text("connect4") | bold | center,
@@ -49,6 +51,7 @@ void Game::start() {
             hbox(text("ip: "), ipIn->Render()),
             hbox(text("tcp: "), tcpIn->Render()),
             hbox(text("udp: "), udpIn->Render()),
+            hbox(text("room: "), roomIn->Render()),
             connect->Render() | center
         }) | border | size(WIDTH, EQUAL, 40) | center;
     });
@@ -96,6 +99,10 @@ void Game::start() {
         if(e == Event::Escape) {
             m_page = 0;
             // TODO announce leave + confirm before leaving
+            return true;
+        }
+        if(e == Event::Return) {
+            // place piece
             return true;
         }
         return false;
