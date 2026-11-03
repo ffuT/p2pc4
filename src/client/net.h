@@ -27,10 +27,10 @@ class Net {
 
     bool init(const InitInfo& info, bool& start);
 
-    void sendHover(uint8_t pos); // non-important game state info
+    void sendHover(uint8_t pos); // player position + keep alive
     bool poll(uint8_t& opPos);
-    bool sendMove(); // reliable important game move info
-    bool pollMove();
+    bool sendMove(uint8_t move); // reliable important game move info
+    bool pollMove(uint8_t& move);
     
     private:
     int createUdpSocket();

@@ -5,6 +5,7 @@
 #include <bits/types/struct_timeval.h>
 #include <cerrno>
 #include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <netdb.h>
@@ -167,7 +168,9 @@ bool Net::init(const Net::InitInfo& info, bool& start) {
     if(!waitStatus.ok())
         throw std::runtime_error(waitStatus.error_message().c_str());
     printf("peer ip: %s:%d\n", peerInfo.ip().c_str(), peerInfo.port());
-
+    
+    start = peerInfo.start();
+    
     peerAddress(peerInfo);
     return holePunch();
 }
@@ -178,7 +181,8 @@ void Net::sendHover(uint8_t pos) {
     sendto(m_fd, &p, sizeof(p), 0, (sockaddr*)&peer, sizeof(peer));
 }
 
-bool Net::sendMove() {
+// sends the made move returns true on ack
+bool Net::sendMove(uint8_t move) {
 
     // keep sending move
 
@@ -187,7 +191,8 @@ bool Net::sendMove() {
     return false; // no ack received
 }
 
-bool Net::pollMove(){
+// polls opponents move, return true on receiving
+bool Net::pollMove(uint8_t& move){
     // keep waiting for move
 
     //send ack when received

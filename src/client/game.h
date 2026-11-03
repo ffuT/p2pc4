@@ -1,8 +1,13 @@
 #pragma once
 
 #include "net.h"
+#include <cstdint>
 #include <ftxui/component/app.hpp>
 #include <ftxui/component/loop.hpp>
+#include <ftxui/screen/color.hpp>
+
+constexpr uint32_t version = (1 << 16) | (0 << 8) | 0; // 1.0.0
+constexpr int rows = 6, cols = 7;
 
 class Game {
 public:
@@ -13,8 +18,12 @@ public:
 
 private:
     bool checkWin();
-    void makeMove();
+    void makeMove(bool myMove, uint8_t move);
     bool m_myTurn;
+    bool m_sendMove = false;
+    uint8_t m_board[rows*cols]{};
+    ftxui::Color m_color;
+    ftxui::Color m_oppColor;
 
     Net m_net;
     std::string m_ip, m_tcp, m_udp, m_room;
