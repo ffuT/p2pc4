@@ -9,6 +9,13 @@
 constexpr uint32_t version = (1 << 16) | (0 << 8) | 0; // 1.0.0
 constexpr int rows = 6, cols = 7;
 
+enum class state{
+    turnNoMove,
+    turnMadeMove,
+    notTurn,
+};
+
+
 class Game {
 public:
     Game();
@@ -19,8 +26,8 @@ public:
 private:
     bool checkWin();
     void makeMove(bool myMove, uint8_t move);
-    bool m_myTurn;
     bool m_sendMove = false;
+    state m_state = state::notTurn;
     uint8_t m_board[rows*cols]{};
     ftxui::Color m_color;
     ftxui::Color m_oppColor;

@@ -176,51 +176,72 @@ bool Net::init(const Net::InitInfo& info, bool& start) {
 }
 
 void Net::sendHover(uint8_t pos) {
-    m_time++;
-    packet p{.time = m_time, .pos = pos};
+    m_keepAliveClock++;
+    packet p{PacketType::pos, m_keepAliveClock, pos};
     sendto(m_fd, &p, sizeof(p), 0, (sockaddr*)&peer, sizeof(peer));
 }
 
-// sends the made move returns true on ack
-bool Net::sendMove(uint8_t move) {
-
-    // keep sending move
-
-    // return when ack received;
-
-    return false; // no ack received
+void Net::sendMove(uint8_t move) {
+    packet p{PacketType::move, 0, move};
+    sendto(m_fd, &p, sizeof(p), 0, (sockaddr*)&peer, sizeof(peer));
 }
 
-// polls opponents move, return true on receiving
-bool Net::pollMove(uint8_t& move){
-    // keep waiting for move
+Poll Net::poll(uint8_t& oppPos) {
+    if (m_oppTimeout + std::chrono::seconds(m_timeOutDelaySeconds) < std::chrono::steady_clock().now())
+        return Poll::NONE; // stopped receiving
+    if (m_moving && (m_moveTimeout + std::chrono::milliseconds(m_moveTimeOutDelayMs)) < std::chrono::steady_clock().now()) {
+        m_moving = false;
+        return Poll::oppMoved;
+    }
 
-    //send ack when received
-
-    return false;
-}
-
-bool Net::poll(uint8_t& opPos) {
-    if (m_oppTimeout + std::chrono::seconds(5) < std::chrono::steady_clock().now())
-        return false; // stopped receiving
-    
     char buf[64]{};
     sockaddr from{};
     socklen_t fromLen = sizeof(from);
     ssize_t n = recvfrom(m_fd, buf, sizeof(buf), 0, (sockaddr*)&from, &fromLen);
-    if( n < 0){
+
+    if(n < 0){
         if(errno == EAGAIN || errno == EWOULDBLOCK)
-            return true;
+            return Poll::empty;
         printf("some error idk!");
-        return false; // got an error
+        return Poll::err; // got an error
     }
-    packet p;
-    memcpy(&p, buf, sizeof(p));
-    if(m_oppTime > p.time) // discard old packet
-        return true;
+
+    if(!verifyPacket(n, from))
+        return Poll::empty; // not from peer
+    
     m_oppTimeout = std::chrono::steady_clock().now();
-    m_oppTime = p.time;
-    opPos = p.pos;
+
+    packet p;
+    packet ack;
+    memcpy(&p, buf, sizeof(p));
+
+    switch (p.type) {
+        case PacketType::pos :
+            oppPos = p.pos;
+            return Poll::empty;
+        case PacketType::move :
+            oppPos = p.pos;
+            m_moving = true;
+            m_moveTimeout = std::chrono::steady_clock().now();
+            ack.type = PacketType::ack;
+            sendto(m_fd, &ack, sizeof(ack), 0, (sockaddr*)&peer, sizeof(peer));
+            return Poll::empty;
+        case PacketType::ack:
+            return Poll::ack;
+    }
+    return Poll::NONE; // cant happen
+}
+
+// checks size == sizeof(packet) and sender == peer
+bool Net::verifyPacket(ssize_t size, sockaddr from) {
+    if(size != sizeof(packet)) // check size
+        return false;
+
+    if(from.sa_family != AF_INET) // check sender
+        return false;
+    else if (((sockaddr_in*)&from)->sin_addr.s_addr != peer.sin_addr.s_addr)
+        return false;
+
     return true;
 }
 

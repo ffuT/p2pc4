@@ -1,5 +1,6 @@
 #include "game.h"
 #include "ftxui/dom/elements.hpp"
+#include "net.h"
 #include <chrono>
 #include <cstdint>
 #include <ftxui/component/app.hpp>
@@ -32,11 +33,14 @@ void Game::start() {
         m_page = 1;
         // TODO give another st to stop on Esc
         std::jthread t([&](std::stop_token st) { 
-            bool ok = m_net.init(Net::InitInfo{m_ip, m_tcp, m_udp, m_room, version}, m_myTurn);
+            bool turn;
+            bool ok = m_net.init(Net::InitInfo{m_ip, m_tcp, m_udp, m_room, version}, turn);
             if(ok){
                 m_page = 2;
-                m_color = m_myTurn ? Color::Red : Color::Yellow;
-                m_oppColor = !m_myTurn ? Color::Red : Color::Yellow;
+                // set colors and turn
+                m_color = turn ? Color::Red : Color::Yellow;
+                m_oppColor = !turn ? Color::Red : Color::Yellow;
+                m_state = turn ? state::turnNoMove : state::notTurn;
             }
             else
                 m_page = 0;
@@ -66,10 +70,10 @@ void Game::start() {
         Elements rowsE;
         Elements select;
         for (int s = 0; s < cols; s++) {
-            if(m_myTurn && s == m_currentPos) { // own pos
+            if((m_state != state::notTurn) && s == m_currentPos) { // own pos
                 select.push_back(text(" @ ") | dim | center | borderEmpty | color(m_color));
-                continue;;
-            } else if (!m_myTurn && s == m_oppPos) { // op pos
+                continue;
+            } else if (m_state == state::notTurn && s == m_oppPos) { // op pos
                 select.push_back(text(" @ ") | dim | center | borderEmpty | color(m_oppColor));
                 continue;
             }
@@ -81,12 +85,12 @@ void Game::start() {
             Elements line;
             for(int c = 0; c < cols; c++){
                 uint8_t spot = r * cols + c;
-                if( m_board[spot] == 0)
+                if(m_board[spot] == 0)
                     line.push_back(text(" . ") | dim | border | center);
                 else if (m_board[spot] == 1)
-                    line.push_back(text(" @ ") | dim | color(m_color) | border | center );
+                    line.push_back(text(" @ ") | color(m_color) | border | center );
                 else
-                    line.push_back(text(" @ ") | dim | color(m_oppColor) |  border | center );
+                    line.push_back(text(" @ ") | color(m_oppColor) |  border | center );
             } 
             rowsE.push_back(hbox(line) | center);
         }
@@ -95,13 +99,13 @@ void Game::start() {
         return vbox(rowsE)| border | size(WIDTH, EQUAL, 40) | center;
     });
     auto game = CatchEvent(gameView, [&](Event e){
-        if (m_myTurn){
+        if (m_state == state::turnNoMove){
             if(e == Event::ArrowLeft) {
-                m_currentPos = m_currentPos-1 < rows ? m_currentPos-1 : rows;
+                m_currentPos = (uint8_t)(m_currentPos-1) < cols ? m_currentPos-1 : cols-1;
                 return true;
             }
             if(e == Event::ArrowRight) {
-                m_currentPos = m_currentPos+1 <= rows ? m_currentPos+1 : 0;
+                m_currentPos = m_currentPos+1 < cols ? m_currentPos+1 : 0;
                 return true;
             }
         }
@@ -111,12 +115,11 @@ void Game::start() {
             return true;
         }
         if(e == Event::Return) {
-            if(m_myTurn){
-                // check if legal move
+            if(m_state == state::turnNoMove){
                 m_sendMove = true;
-                m_myTurn = false;
+                m_state = state::turnMadeMove;
+                makeMove(true, m_currentPos);
             }
-            // place piece
             return true;
         }
         return false;
@@ -124,29 +127,38 @@ void Game::start() {
 
     auto root = Container::Tab({menu, loading, game}, &m_page);
     m_loop.emplace(&m_screen.value(), root);
+    bool send = true;
     while (!m_loop->HasQuitted()) {
-        
         if(m_page == 2) {
-            m_net.sendHover(m_currentPos);
-            if(!m_net.poll(m_oppPos)){
-                m_page = 0;
+            switch (m_state) {
+                case state::turnMadeMove:
+                    if(m_sendMove)
+                        m_net.sendMove(m_currentPos);
+                    else
+                        m_net.sendHover(m_currentPos);
+                break;
+                default: // send hovers as keep alive
+                    m_net.sendHover(m_currentPos);
+                break;
             }
-        }
-
-        if(m_sendMove){
-            if (m_net.sendMove(m_currentPos)) {
-                makeMove(true, m_currentPos);
-                m_sendMove = false;
+            Poll ret = m_net.poll(m_oppPos);
+            switch (ret) {
+                case Poll::oppMoved:
+                    m_state = state::turnNoMove;
+                    makeMove(false, m_oppPos);
+                break;
+                case Poll::ack:
+                    m_state = state::notTurn;
+                    m_sendMove = false;
+                case Poll::empty:
+                break;
+                case Poll::err:
+                case Poll::NONE:
+                    m_page = 0; // back to lobby on error for now
+                break;
             }
-        } else {
-            uint8_t oppMove;
-            if(m_net.pollMove(oppMove)) {
-                makeMove(false, oppMove);
-                m_myTurn = true;
-                // start thread to pollmove for ~1 sec, to ack all sends from opp
-            }
-        }
-        
+        }       
+        send = !send;
         m_loop->RunOnce();
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
@@ -158,7 +170,7 @@ bool Game::checkWin(){
 
 void Game::makeMove(bool myMove, uint8_t move) {
     uint8_t spot = cols * (rows-1) + move;
-    while (m_board[spot != 0]) {
+    while (m_board[spot] != 0) {
         spot -= cols;
     }
     m_board[spot] = myMove ? 1 : 2;

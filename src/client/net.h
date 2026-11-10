@@ -7,7 +7,22 @@
 
 #define printf(fmt, ...) ((void)0)
 
+enum class Poll : int8_t {
+    oppMoved,
+    empty,
+    ack,
+    err, // error in networking
+    NONE, // opp left
+};
+
+enum class PacketType : int8_t {
+    pos,
+    move,
+    ack,
+};
+
 struct packet {
+    PacketType type;
     uint32_t time;
     uint8_t pos;
 };
@@ -28,20 +43,29 @@ class Net {
     bool init(const InitInfo& info, bool& start);
 
     void sendHover(uint8_t pos); // player position + keep alive
-    bool poll(uint8_t& opPos);
-    bool sendMove(uint8_t move); // reliable important game move info
-    bool pollMove(uint8_t& move);
+    void sendMove(uint8_t move); // reliable important game move info
+    Poll poll(uint8_t& oppPos);
     
     private:
+    // initialization
     int createUdpSocket();
     bool registerUdp(const sockaddr_in& addr, const std::string& token);
     sockaddr_in resolveUdp(const char* host, const char* port);
     void peerAddress(const rendezvous::v1::PeerInfo&);
     bool holePunch();
 
-    uint32_t m_time = 0;
+    // runtime
+    bool verifyPacket(ssize_t n, sockaddr from);
+
+    // moves
+    bool m_moving = false;
+    const uint16_t m_moveTimeOutDelayMs = 200;
+    std::chrono::time_point<std::chrono::steady_clock> m_moveTimeout;
+
+    uint32_t m_keepAliveClock = 0;
     uint32_t m_oppTime = 0;
     std::chrono::time_point<std::chrono::steady_clock> m_oppTimeout;
+    const uint8_t m_timeOutDelaySeconds = 5;
     int m_fd;
     sockaddr_in peer{};
 };
