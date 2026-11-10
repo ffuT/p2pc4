@@ -15,7 +15,6 @@ enum class state{
     notTurn,
 };
 
-
 class Game {
 public:
     Game();
@@ -28,6 +27,7 @@ private:
     void makeMove(bool myMove, uint8_t move);
     bool m_sendMove = false;
     state m_state = state::notTurn;
+    uint8_t m_moveCount = 0;
     uint8_t m_board[rows*cols]{};
     ftxui::Color m_color;
     ftxui::Color m_oppColor;

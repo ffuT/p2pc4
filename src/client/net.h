@@ -43,8 +43,8 @@ class Net {
     bool init(const InitInfo& info, bool& start);
 
     void sendHover(uint8_t pos); // player position + keep alive
-    void sendMove(uint8_t move); // reliable important game move info
-    Poll poll(uint8_t& oppPos);
+    void sendMove(uint8_t move, uint8_t seq); // reliable important game move info
+    Poll poll(uint8_t& oppPos, uint8_t seq);
     
     private:
     // initialization

@@ -34,7 +34,12 @@ void Game::start() {
         // TODO give another st to stop on Esc
         std::jthread t([&](std::stop_token st) { 
             bool turn;
-            bool ok = m_net.init(Net::InitInfo{m_ip, m_tcp, m_udp, m_room, version}, turn);
+            bool ok;
+            try {
+                ok = m_net.init(Net::InitInfo{m_ip, m_tcp, m_udp, m_room, version}, turn);
+            } catch (const std::exception& e) {
+                // print to log or carry back to menu
+            }
             if(ok){
                 m_page = 2;
                 // set colors and turn
@@ -45,6 +50,7 @@ void Game::start() {
             else
                 m_page = 0;
             m_screen->PostEvent(Event::Custom);
+            
         });
         t.detach();
     });
@@ -133,7 +139,7 @@ void Game::start() {
             switch (m_state) {
                 case state::turnMadeMove:
                     if(m_sendMove)
-                        m_net.sendMove(m_currentPos);
+                        m_net.sendMove(m_currentPos, m_moveCount);
                     else
                         m_net.sendHover(m_currentPos);
                 break;
@@ -141,7 +147,7 @@ void Game::start() {
                     m_net.sendHover(m_currentPos);
                 break;
             }
-            Poll ret = m_net.poll(m_oppPos);
+            Poll ret = m_net.poll(m_oppPos, m_moveCount);
             switch (ret) {
                 case Poll::oppMoved:
                     m_state = state::turnNoMove;
@@ -157,7 +163,7 @@ void Game::start() {
                     m_page = 0; // back to lobby on error for now
                 break;
             }
-        }       
+        }
         send = !send;
         m_loop->RunOnce();
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
@@ -169,6 +175,7 @@ bool Game::checkWin(){
 }
 
 void Game::makeMove(bool myMove, uint8_t move) {
+    m_moveCount++;
     uint8_t spot = cols * (rows-1) + move;
     while (m_board[spot] != 0) {
         spot -= cols;

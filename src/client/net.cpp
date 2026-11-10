@@ -181,12 +181,12 @@ void Net::sendHover(uint8_t pos) {
     sendto(m_fd, &p, sizeof(p), 0, (sockaddr*)&peer, sizeof(peer));
 }
 
-void Net::sendMove(uint8_t move) {
-    packet p{PacketType::move, 0, move};
+void Net::sendMove(uint8_t move, uint8_t seq) {
+    packet p{PacketType::move, (uint32_t)seq, move};
     sendto(m_fd, &p, sizeof(p), 0, (sockaddr*)&peer, sizeof(peer));
 }
 
-Poll Net::poll(uint8_t& oppPos) {
+Poll Net::poll(uint8_t& oppPos, uint8_t seq) {
     if (m_oppTimeout + std::chrono::seconds(m_timeOutDelaySeconds) < std::chrono::steady_clock().now())
         return Poll::NONE; // stopped receiving
     if (m_moving && (m_moveTimeout + std::chrono::milliseconds(m_moveTimeOutDelayMs)) < std::chrono::steady_clock().now()) {
@@ -224,10 +224,13 @@ Poll Net::poll(uint8_t& oppPos) {
             m_moving = true;
             m_moveTimeout = std::chrono::steady_clock().now();
             ack.type = PacketType::ack;
+            ack.time = p.time;
             sendto(m_fd, &ack, sizeof(ack), 0, (sockaddr*)&peer, sizeof(peer));
             return Poll::empty;
         case PacketType::ack:
-            return Poll::ack;
+            if(p.time == (uint32_t)seq)
+               return Poll::ack;
+            else return Poll::empty;
     }
     return Poll::NONE; // cant happen
 }
