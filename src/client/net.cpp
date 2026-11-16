@@ -125,7 +125,7 @@ bool Net::holePunch() {
     return pa;
 }
 
-bool Net::init(const Net::InitInfo& info, bool& start) {
+bool Net::init(const Net::InitInfo& info, bool& start, std::stop_token& st) {
     std::string ip = info.ip == "" ? "127.0.0.1" : info.ip;
     std::string tcp = info.tcp == "" ? "50051" : info.tcp;
     std::string udp = info.udp == "" ? "50052" : info.udp;
@@ -159,7 +159,7 @@ bool Net::init(const Net::InitInfo& info, bool& start) {
         throw std::runtime_error("Failed to Register udp!");
 
     grpc::ClientContext waitCtx;
-    //std::stop_callback onStop(st, [&]{waitCtx.TryCancel();});
+    std::stop_callback onStop(st, [&]{waitCtx.TryCancel();});
     rendezvous::v1::WaitReq waitReq;
     waitReq.set_token(joinResp.token());
     rendezvous::v1::PeerInfo peerInfo;
@@ -194,10 +194,10 @@ Poll Net::poll(uint8_t& oppPos, uint8_t seq) {
         return Poll::oppMoved;
     }
 
-    char buf[64]{};
+    char buf[sizeof(packet)]{};
     sockaddr from{};
     socklen_t fromLen = sizeof(from);
-    ssize_t n = recvfrom(m_fd, buf, sizeof(buf), 0, (sockaddr*)&from, &fromLen);
+    ssize_t n = recvfrom(m_fd, buf, sizeof(buf), MSG_DONTWAIT, (sockaddr*)&from, &fromLen);
 
     if(n < 0){
         if(errno == EAGAIN || errno == EWOULDBLOCK)
@@ -209,24 +209,24 @@ Poll Net::poll(uint8_t& oppPos, uint8_t seq) {
     if(!verifyPacket(n, from))
         return Poll::empty; // not from peer
     
-    m_oppTimeout = std::chrono::steady_clock().now();
+    m_oppTimeout = std::chrono::steady_clock::now();
 
     packet p;
-    packet ack;
+    packet ack{};
     memcpy(&p, buf, sizeof(p));
 
     switch (p.type) {
         case PacketType::pos :
             oppPos = p.pos;
-            return Poll::empty;
+            return Poll::update;
         case PacketType::move :
             oppPos = p.pos;
             m_moving = true;
-            m_moveTimeout = std::chrono::steady_clock().now();
+            m_moveTimeout = std::chrono::steady_clock::now();
             ack.type = PacketType::ack;
             ack.time = p.time;
             sendto(m_fd, &ack, sizeof(ack), 0, (sockaddr*)&peer, sizeof(peer));
-            return Poll::empty;
+            return Poll::update;
         case PacketType::ack:
             if(p.time == (uint32_t)seq)
                return Poll::ack;

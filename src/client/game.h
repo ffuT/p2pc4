@@ -5,14 +5,21 @@
 #include <ftxui/component/app.hpp>
 #include <ftxui/component/loop.hpp>
 #include <ftxui/screen/color.hpp>
+#include <thread>
 
 constexpr uint32_t version = (1 << 16) | (0 << 8) | 0; // 1.0.0
-constexpr int rows = 6, cols = 7;
+constexpr int8_t rows = 6, cols = 7;
 
-enum class state{
+enum class state : int8_t{
     turnNoMove,
     turnMadeMove,
     notTurn,
+};
+
+enum class player : int8_t{
+    me = 1,
+    opp = 2,
+    NONE = 0,
 };
 
 class Game {
@@ -23,19 +30,25 @@ public:
     void start();
 
 private:
-    bool checkWin();
+    void resetGame();
+
+    uint8_t checkWin();
     void makeMove(bool myMove, uint8_t move);
-    bool m_sendMove = false;
+    
+    // game 
     state m_state = state::notTurn;
-    uint8_t m_moveCount = 0;
-    uint8_t m_board[rows*cols]{};
+    player m_board[rows*cols]{player::NONE};
     ftxui::Color m_color;
     ftxui::Color m_oppColor;
-
+    uint8_t m_moveCount = 0;
+    bool m_sendMove = false;
+    
+    // core
     Net m_net;
+    std::jthread m_netInitThread;
     std::string m_ip, m_tcp, m_udp, m_room;
     int m_page = 0;
-    uint8_t m_currentPos = 0, m_oppPos = 0;
+    uint8_t m_currentPos = cols/2, m_oppPos = cols/2;
     std::optional<ftxui::App> m_screen;
     std::optional<ftxui::Loop> m_loop;
 };

@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstdint>
 #include <netinet/in.h>
+#include <stop_token>
 #include <string>
 
 #define printf(fmt, ...) ((void)0)
@@ -10,6 +11,7 @@
 enum class Poll : int8_t {
     oppMoved,
     empty,
+    update,
     ack,
     err, // error in networking
     NONE, // opp left
@@ -40,7 +42,7 @@ class Net {
     Net();
     ~Net();
 
-    bool init(const InitInfo& info, bool& start);
+    bool init(const InitInfo& info, bool& start, std::stop_token& st);
 
     void sendHover(uint8_t pos); // player position + keep alive
     void sendMove(uint8_t move, uint8_t seq); // reliable important game move info

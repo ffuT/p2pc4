@@ -2,6 +2,7 @@
 #include "ftxui/dom/elements.hpp"
 #include "net.h"
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <ftxui/component/app.hpp>
 #include <ftxui/component/component.hpp>
@@ -31,12 +32,11 @@ void Game::start() {
     Component roomIn = Input(&m_room, "room", single);
     Component connect = Button("connect", [&] { 
         m_page = 1;
-        // TODO give another st to stop on Esc
-        std::jthread t([&](std::stop_token st) { 
+        m_netInitThread = std::jthread([&](std::stop_token st) {
             bool turn;
-            bool ok;
+            bool ok = false;
             try {
-                ok = m_net.init(Net::InitInfo{m_ip, m_tcp, m_udp, m_room, version}, turn);
+                ok = m_net.init(Net::InitInfo{m_ip, m_tcp, m_udp, m_room, version}, turn, st);
             } catch (const std::exception& e) {
                 // print to log or carry back to menu
             }
@@ -52,7 +52,7 @@ void Game::start() {
             m_screen->PostEvent(Event::Custom);
             
         });
-        t.detach();
+        m_netInitThread.detach();
     });
 
     auto menuLayout = Container::Horizontal({ipIn, tcpIn, udpIn, roomIn, connect});
@@ -91,94 +91,196 @@ void Game::start() {
             Elements line;
             for(int c = 0; c < cols; c++){
                 uint8_t spot = r * cols + c;
-                if(m_board[spot] == 0)
+                if(m_board[spot] == player::NONE)
                     line.push_back(text(" . ") | dim | border | center);
-                else if (m_board[spot] == 1)
+                else if (m_board[spot] == player::me)
                     line.push_back(text(" @ ") | color(m_color) | border | center );
                 else
                     line.push_back(text(" @ ") | color(m_oppColor) |  border | center );
-            } 
+            }
             rowsE.push_back(hbox(line) | center);
         }
 
         rowsE.push_back(separator());
         return vbox(rowsE)| border | size(WIDTH, EQUAL, 40) | center;
     });
-    auto game = CatchEvent(gameView, [&](Event e){
-        if (m_state == state::turnNoMove){
-            if(e == Event::ArrowLeft) {
-                m_currentPos = (uint8_t)(m_currentPos-1) < cols ? m_currentPos-1 : cols-1;
-                return true;
-            }
-            if(e == Event::ArrowRight) {
-                m_currentPos = m_currentPos+1 < cols ? m_currentPos+1 : 0;
-                return true;
-            }
-        }
-        if(e == Event::Escape) {
-            m_page = 0;
-            // TODO announce leave + confirm before leaving
-            return true;
-        }
-        if(e == Event::Return) {
-            if(m_state == state::turnNoMove){
-                m_sendMove = true;
-                m_state = state::turnMadeMove;
-                makeMove(true, m_currentPos);
-            }
-            return true;
+
+    auto root = Container::Tab({menu, loading, gameView}, &m_page);
+    
+    auto app = CatchEvent(root, [&](Event e){
+        switch (m_page) {
+            case 0: // main menu
+                if(e == Event::Escape){
+                    m_screen->Exit(); // close game
+                    return false;
+                }
+            case 1: // loading menu
+                if(e == Event::Escape){
+                    m_netInitThread.request_stop(); // back to menu
+                    return false;
+                }
+            case 2: // ingame
+                if (m_state == state::turnNoMove){
+                    if(e == Event::ArrowLeft) {
+                        m_currentPos = (uint8_t)(m_currentPos-1) < cols ? m_currentPos-1 : cols-1;
+                        return true;
+                    }
+                    if(e == Event::ArrowRight) {
+                        m_currentPos = m_currentPos+1 < cols ? m_currentPos+1 : 0;
+                        return true;
+                    }
+                    if(e == Event::Return){
+                        m_sendMove = true;
+                        m_state = state::turnMadeMove;
+                        makeMove(true, m_currentPos);
+                        return true;
+                    }
+                }
+                if(e == Event::Escape){
+                    m_page = 0;
+                    // TODO announce leave or sumthn   
+                    return false;   
+                }
         }
         return false;
     });
 
-    auto root = Container::Tab({menu, loading, game}, &m_page);
-    m_loop.emplace(&m_screen.value(), root);
+    m_loop.emplace(&m_screen.value(), app);
     bool send = true;
+    bool checkWinner = false;
+    auto now = std::chrono::steady_clock::now();
+    auto last = now;
     while (!m_loop->HasQuitted()) {
+        last = now;
+        now = std::chrono::steady_clock::now();
+        auto delta = now - last;
         if(m_page == 2) {
-            switch (m_state) {
-                case state::turnMadeMove:
-                    if(m_sendMove)
-                        m_net.sendMove(m_currentPos, m_moveCount);
-                    else
+            if(send) { // send every other frame only
+                switch (m_state) {
+                    case state::turnMadeMove:
+                        if(m_sendMove)
+                            m_net.sendMove(m_currentPos, m_moveCount);
+                        else
+                            m_net.sendHover(m_currentPos);
+                    break;
+                    default: // send hovers as keep alive
                         m_net.sendHover(m_currentPos);
-                break;
-                default: // send hovers as keep alive
-                    m_net.sendHover(m_currentPos);
-                break;
+                    break;
+                }
             }
-            Poll ret = m_net.poll(m_oppPos, m_moveCount);
-            switch (ret) {
-                case Poll::oppMoved:
-                    m_state = state::turnNoMove;
-                    makeMove(false, m_oppPos);
-                break;
-                case Poll::ack:
-                    m_state = state::notTurn;
-                    m_sendMove = false;
-                case Poll::empty:
-                break;
-                case Poll::err:
-                case Poll::NONE:
-                    m_page = 0; // back to lobby on error for now
-                break;
+            bool quedPoll = true;
+            checkWinner = false;
+            while (quedPoll) {
+                uint8_t cOppPos = m_oppPos;
+                Poll ret = m_net.poll(m_oppPos, m_moveCount);
+                if(ret == Poll::empty)
+                    break;
+                m_screen->PostEvent(Event::Custom);
+                switch (ret) {
+                    case Poll::oppMoved:
+                        checkWinner = true;
+                        m_state = state::turnNoMove;
+                        makeMove(false, m_oppPos);
+                    break;
+                    case Poll::ack:
+                        checkWinner = true;
+                        m_state = state::notTurn;
+                        m_sendMove = false;
+                    case Poll::update:
+                    case Poll::empty:
+                    break;
+                    case Poll::err:
+                    case Poll::NONE:
+                        quedPoll = false;
+                        m_page = 0; // back to lobby on error for now
+                    break;
+                }
+            }
+        }
+        if(checkWinner) {
+            int8_t win = checkWin();
+            if(win != 0){
+                m_page = win == 1 ? 0 : 0; // win- : loss-screen
+                resetGame();
             }
         }
         send = !send;
         m_loop->RunOnce();
-        std::this_thread::sleep_for(std::chrono::milliseconds(16));
+        std::this_thread::sleep_for((std::chrono::microseconds(16000)-delta));
     }
 }
 
-bool Game::checkWin(){
-    return false;
+void Game::resetGame() {
+    for(int i = 0; i < rows*cols; i ++){
+        m_board[i] = player::NONE;
+    }
+
+    m_moveCount = 0;
+    m_sendMove = 0;
+    m_state = state::notTurn;
+    m_currentPos = cols/2;
+    m_oppPos = cols/2;
 }
 
 void Game::makeMove(bool myMove, uint8_t move) {
     m_moveCount++;
-    uint8_t spot = cols * (rows-1) + move;
-    while (m_board[spot] != 0) {
+    int8_t spot = cols * (rows-1) + move;
+    while (m_board[spot] != player::NONE) {
         spot -= cols;
     }
-    m_board[spot] = myMove ? 1 : 2;
+    if(spot < 0){ // illegal moves are never sent
+        m_moveCount--;
+        m_state = state::turnNoMove;
+        m_sendMove = false;
+        return;
+    }
+    m_board[spot] = myMove ? player::me : player::opp;
+}
+
+uint8_t Game::checkWin() { // return 0 = none, 1 = client, 2 = opponent
+    for(int8_t i = 1; i <= 2; i++) { // run for player 1 and 2
+        player p = static_cast<player>(i);
+        int8_t count = 0;
+        for(int row = 0; row < rows; row++){ // horizontal
+            count = 0;
+            for(int col = 0; col < cols; col++){
+                if(m_board[row*cols + col] == p)
+                    count++;
+                else
+                    count = 0;
+                if (count == 4)
+                    return i;
+            }
+        }
+        for(int col = 0; col < cols; col++){ // vertical
+            count = 0;
+            for(int row = rows-1; row >= 0; row--){
+                if(m_board[row*cols + col] == p)
+                    count++;
+                else
+                    count = 0;
+                if (count == 4)
+                    return i;
+            }
+        }
+        for(int row = rows-1; row > 3; row--){ // diagonal asc
+            for(int col = 0; col < cols-3; col++){
+                if(m_board[row*cols + col] == p && // ugh
+                    m_board[(row-1)*cols + (col+1)] == p &&
+                    m_board[(row-2)*cols + (col+2)] == p &&
+                    m_board[(row-3)*cols + (col+3)] == p) 
+                    return i;
+            }
+        }
+        for(int row = 0; row < rows-3; row++){ // diagonal desc
+            for(int col = 0; col < cols-3; col++){
+                if(m_board[row*cols + col] == p && // ugh
+                    m_board[(row+1)*cols + (col+1)] == p &&
+                    m_board[(row+2)*cols + (col+2)] == p &&
+                    m_board[(row+3)*cols + (col+3)] == p) 
+                    return i;  
+            }
+        }
+    }
+    return 0; 
 }

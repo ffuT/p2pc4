@@ -43,8 +43,10 @@ type Room struct {
 
 type server struct {
 	pb.UnimplementedRendezvousServer
-	rooms map[string]Room
-	mu    sync.Mutex
+	rooms   map[string]Room
+	mu      sync.Mutex
+	tcpPort int
+	updPort int
 }
 
 func GetServer() *server {
@@ -98,6 +100,8 @@ func (s *server) WaitPeer(ctx context.Context, req *pb.WaitReq) (*pb.PeerInfo, e
 			ready = room.ready
 			player1 = true
 			break
+		} else if room.p2 == nil {
+			continue
 		} else if room.p2.token == string(req.Token) {
 			player1 = false
 			ready = room.ready
@@ -216,6 +220,8 @@ func commands(s *server) {
 			}
 			cmd.Stdout = os.Stdout
 			cmd.Run()
+			fmt.Printf("server listening tcp on :%d...\n", s.tcpPort)
+			fmt.Printf("server listening udp on :%d...\n", s.updPort)
 		default:
 			log.Printf("Command Not Found: %s", args[0])
 		}
@@ -239,6 +245,8 @@ func main() {
 	fmt.Printf("server listening udp on :%d...\n", *updPort)
 
 	s := GetServer()
+	s.tcpPort = *tcpPort
+	s.updPort = *updPort
 	go udpLoop(udpConn, s)
 	go commands(s)
 
