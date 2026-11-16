@@ -2,7 +2,7 @@
 
 Peer to Peer Connect Four in the terminal.
 I made this p2p game for 2 main reasons. First because i have an idea for another bigger multiplayer game, but i wanted to start with something a bit easier. Secondly because of my distributed systems course in uni, i want to get comfortable with gRPC, since its what we use (even tho its quite a small part of the project now). 
-The project is made using mostly cpp, and some go. This is also the first project ive made using CMake, vcpkg
+The project is made using mostly cpp, and some go. This is also the first project ive made using CMake, and vcpkg
 
 #### example image 
 ![example image](image.png)
@@ -15,7 +15,7 @@ The project is made using mostly cpp, and some go. This is also the first projec
 
 The server is only used to find the other player
 
-## Status
+## tbd
 
 <!-- TODO: keep this list up to date -->
 
@@ -76,5 +76,5 @@ scripts/      Go code generation
 
 
 ## Ai Disclosure
-Following the [0rwx](https://0rwx.com/) Model for Ai usage, this project lies in AI:R. Meaning Ai has read my code, helped me come up with solutions, and been used for debugging. The reason for this is my limited knowledge on everything networking, learning new tools, my personal strive for optimal, professional, and clean code. Ive only had claude (opus 5.5) write a few comments to help me implement + some parts of this Readme. Everything else has been typed by me.  
+Following the [0rwx](https://0rwx.com/) framework for Ai usage, this project is AI:R. Meaning Ai has read my code, helped me come up with solutions, and been used for debugging. The reason for this is my limited knowledge on everything networking, learning new tools, my personal strive for optimal, professional, and clean code. Ive only had claude write some parts of this Readme. Everything else has been typed out by me, and also mostly from my brain  
 
