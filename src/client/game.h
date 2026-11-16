@@ -30,11 +30,24 @@ public:
     void start();
 
 private:
-    void resetGame();
-
     uint8_t checkWin();
+    void resetGame();
     void makeMove(bool myMove, uint8_t move);
     
+    // net
+    bool poll();
+    void send();
+    void tryConnect();
+
+    // ui
+    bool HandleEvent(ftxui::Event e);
+    ftxui::Component buildMenu();
+    ftxui::Component buildLoad();
+    ftxui::Component buildGame();
+    // ftxui::Component buildWin();
+    // ftxui::Component buildLose();
+    // ftxui::Component buildDraw();
+
     // game 
     state m_state = state::notTurn;
     player m_board[rows*cols]{player::NONE};
@@ -42,7 +55,7 @@ private:
     ftxui::Color m_oppColor;
     uint8_t m_moveCount = 0;
     bool m_sendMove = false;
-    
+
     // core
     Net m_net;
     std::jthread m_netInitThread;
